@@ -6,7 +6,6 @@ import { DashboardLayout } from "@/components/dashboard-layout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useTranslation } from "@/components/language-provider"
 import { useAuth } from "@/hooks/use-auth"
-import { getUserData } from "@/lib/storage"
 
 export default function AnalyticsPage() {
   const router = useRouter()
@@ -91,7 +90,7 @@ export default function AnalyticsPage() {
     updateAnalytics()
     const interval = setInterval(updateAnalytics, 5000) // Update every 5 seconds instead of 1
     return () => clearInterval(interval)
-  }, [])
+  }, [user?.id])
 
   if (!user) return null
 
