@@ -88,6 +88,21 @@ pool.on("error", (err: any) => {
  */
 export async function query(sql: string, params?: any[], retries = 2): Promise<any> {
   // Check if required env vars are set before attempting query
+  // Log what we're actually seeing (for debugging)
+  const envCheck = {
+    DB_HOST: process.env.DB_HOST ? `Set (${process.env.DB_HOST.substring(0, 10)}...)` : "NOT SET",
+    DB_PORT: process.env.DB_PORT ? `Set (${process.env.DB_PORT})` : "NOT SET",
+    DB_USER: process.env.DB_USER ? `Set (${process.env.DB_USER})` : "NOT SET",
+    DB_PASSWORD: process.env.DB_PASSWORD ? "Set (***)" : "NOT SET",
+    DB_NAME: process.env.DB_NAME ? `Set (${process.env.DB_NAME})` : "NOT SET",
+    DB_SSL: process.env.DB_SSL ? `Set (${process.env.DB_SSL})` : "NOT SET",
+    NODE_ENV: process.env.NODE_ENV,
+    VERCEL: process.env.VERCEL,
+    VERCEL_ENV: process.env.VERCEL_ENV,
+  }
+  
+  console.log("[MySQL] Environment check:", envCheck)
+  
   if (!process.env.DB_HOST || !process.env.DB_USER || !process.env.DB_PASSWORD || !process.env.DB_NAME) {
     const missing = []
     if (!process.env.DB_HOST) missing.push("DB_HOST")
@@ -95,8 +110,13 @@ export async function query(sql: string, params?: any[], retries = 2): Promise<a
     if (!process.env.DB_PASSWORD) missing.push("DB_PASSWORD")
     if (!process.env.DB_NAME) missing.push("DB_NAME")
     
-    const error = new Error(`Missing required database environment variables: ${missing.join(", ")}. Please configure them in Vercel project settings.`)
+    console.error("[MySQL] ❌ Missing environment variables:", missing)
+    console.error("[MySQL] All environment variables:", Object.keys(process.env).filter(k => k.startsWith("DB_")))
+    
+    const error = new Error(`Missing required database environment variables: ${missing.join(", ")}. Please configure them in Vercel project settings and redeploy.`)
     ;(error as any).code = "ENV_MISSING"
+    ;(error as any).missing = missing
+    ;(error as any).envCheck = envCheck
     throw error
   }
 
