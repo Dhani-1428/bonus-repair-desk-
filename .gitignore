@@ -17,7 +17,13 @@ yarn-error.log*
 .pnpm-debug.log*
 
 # env files
-.env*
+.env
+.env.local
+.env.development
+.env.production
+.env.test
+# Allow .env.example to be committed (template file)
+!.env.example
 
 # vercel
 .vercel
