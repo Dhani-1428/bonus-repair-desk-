@@ -7,7 +7,7 @@
     "dev": "next dev",
     "lint": "eslint .",
     "start": "next start",
-    "postinstall": "prisma generate || true",
+    "postinstall": "echo 'Skipping Prisma - app uses direct MySQL queries' || true",
     "setup": "node scripts/setup-mysql.js",
     "create-tables": "node scripts/create-tables.js",
     "fix-admin": "node scripts/fix-super-admin.js"
