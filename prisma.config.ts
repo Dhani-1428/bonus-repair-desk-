@@ -1,4 +1,5 @@
 // Prisma configuration for Prisma 7.x
+// Note: This app primarily uses direct MySQL queries, Prisma is kept for compatibility
 import "dotenv/config";
 import { defineConfig } from "prisma/config";
 
@@ -26,6 +27,5 @@ export default defineConfig({
   },
   datasource: {
     url: getDatabaseUrl(),
-    adapter: "mysql",
   },
 });
