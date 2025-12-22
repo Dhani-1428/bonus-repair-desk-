@@ -29,18 +29,11 @@ const pool = mysql.createPool({
   enableKeepAlive: true,
   keepAliveInitialDelay: 0,
   connectTimeout: 60000, // 60 seconds timeout for cloud databases
-  acquireTimeout: 60000,
-  timeout: 60000,
-  reconnect: true,
   // Additional options for better connection stability
   multipleStatements: false,
   dateStrings: false,
   supportBigNumbers: true,
   bigNumberStrings: false,
-  // Handle connection errors
-  handleDisconnects: true,
-  // For cloud databases, reduce connection idle time
-  idleTimeout: 300000, // 5 minutes
 })
 
 // Handle pool errors
