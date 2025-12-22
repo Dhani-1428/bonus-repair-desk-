@@ -6,9 +6,9 @@ import { testConnection, query } from "@/lib/mysql"
  * Useful for debugging connection issues
  */
 export async function GET(request: NextRequest) {
-  try {
-    // Get all environment variables (for debugging)
-    const allEnvVars = Object.keys(process.env)
+  // Get all environment variables (for debugging) - defined outside try/catch so it's available everywhere
+  const getAllDbEnvVars = () => {
+    return Object.keys(process.env)
       .filter(k => k.startsWith("DB_"))
       .reduce((acc, k) => {
         if (k === "DB_PASSWORD") {
@@ -18,23 +18,29 @@ export async function GET(request: NextRequest) {
         }
         return acc
       }, {} as Record<string, string>)
-    
-    // Check environment variables
-    const envCheck = {
-      DB_HOST: process.env.DB_HOST ? `✓ Set (${process.env.DB_HOST})` : "✗ Missing",
-      DB_PORT: process.env.DB_PORT ? `✓ Set (${process.env.DB_PORT})` : "✗ Missing",
-      DB_USER: process.env.DB_USER ? `✓ Set (${process.env.DB_USER})` : "✗ Missing",
-      DB_PASSWORD: process.env.DB_PASSWORD ? "✓ Set (hidden)" : "✗ Missing",
-      DB_NAME: process.env.DB_NAME ? `✓ Set (${process.env.DB_NAME})` : "✗ Missing",
-      DB_SSL: process.env.DB_SSL ? `✓ Set (${process.env.DB_SSL})` : "✗ Missing (default: auto-detect)",
-    }
-    
-    // Additional Vercel info
-    const vercelInfo = {
-      VERCEL: process.env.VERCEL || "Not detected",
-      VERCEL_ENV: process.env.VERCEL_ENV || "Not detected",
-      NODE_ENV: process.env.NODE_ENV || "Not detected",
-    }
+  }
+  
+  // Check environment variables - defined outside try/catch
+  const getEnvCheck = () => ({
+    DB_HOST: process.env.DB_HOST ? `✓ Set (${process.env.DB_HOST})` : "✗ Missing",
+    DB_PORT: process.env.DB_PORT ? `✓ Set (${process.env.DB_PORT})` : "✗ Missing",
+    DB_USER: process.env.DB_USER ? `✓ Set (${process.env.DB_USER})` : "✗ Missing",
+    DB_PASSWORD: process.env.DB_PASSWORD ? "✓ Set (hidden)" : "✗ Missing",
+    DB_NAME: process.env.DB_NAME ? `✓ Set (${process.env.DB_NAME})` : "✗ Missing",
+    DB_SSL: process.env.DB_SSL ? `✓ Set (${process.env.DB_SSL})` : "✗ Missing (default: auto-detect)",
+  })
+  
+  // Additional Vercel info - defined outside try/catch
+  const getVercelInfo = () => ({
+    VERCEL: process.env.VERCEL || "Not detected",
+    VERCEL_ENV: process.env.VERCEL_ENV || "Not detected",
+    NODE_ENV: process.env.NODE_ENV || "Not detected",
+  })
+
+  try {
+    const allEnvVars = getAllDbEnvVars()
+    const envCheck = getEnvCheck()
+    const vercelInfo = getVercelInfo()
 
     // Test connection
     const isConnected = await testConnection()
@@ -76,31 +82,24 @@ export async function GET(request: NextRequest) {
       }, { status: 500 })
     }
   } catch (error: any) {
-      const allDbEnvVars = Object.keys(process.env)
-        .filter(k => k.startsWith("DB_"))
-        .reduce((acc, k) => {
-          if (k === "DB_PASSWORD") {
-            acc[k] = process.env[k] ? "✓ Set (hidden)" : "✗ Missing"
-          } else {
-            acc[k] = process.env[k] ? `✓ Set (${process.env[k]})` : "✗ Missing"
-          }
-          return acc
-        }, {} as Record<string, string>)
-      
-      return NextResponse.json({
-        success: false,
-        message: "Database connection test failed",
-        environment: envCheck,
-        allDbEnvVars: allDbEnvVars,
-        vercelInfo: vercelInfo,
-        error: {
-          code: error?.code,
-          message: error?.message,
-          sqlState: error?.sqlState,
-          sqlMessage: error?.sqlMessage,
-          missing: (error as any)?.missing,
-        },
-      }, { status: 500 })
+    const allDbEnvVars = getAllDbEnvVars()
+    const envCheck = getEnvCheck()
+    const vercelInfo = getVercelInfo()
+    
+    return NextResponse.json({
+      success: false,
+      message: "Database connection test failed",
+      environment: envCheck,
+      allDbEnvVars: allDbEnvVars,
+      vercelInfo: vercelInfo,
+      error: {
+        code: error?.code,
+        message: error?.message,
+        sqlState: error?.sqlState,
+        sqlMessage: error?.sqlMessage,
+        missing: (error as any)?.missing,
+      },
+    }, { status: 500 })
   }
 }
 
