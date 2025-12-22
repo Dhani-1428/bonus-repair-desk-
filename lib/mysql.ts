@@ -16,6 +16,36 @@ const getSSLConfig = () => {
   return undefined
 }
 
+// Log connection config (without password) for debugging
+const connectionConfig = {
+  host: process.env.DB_HOST || "localhost",
+  port: parseInt(process.env.DB_PORT || "3306"),
+  user: process.env.DB_USER || "root",
+  password: process.env.DB_PASSWORD ? "***" : "NOT SET",
+  database: process.env.DB_NAME || "admin_panel_db",
+  ssl: getSSLConfig(),
+}
+
+console.log("[MySQL] Connection config:", {
+  host: connectionConfig.host,
+  port: connectionConfig.port,
+  user: connectionConfig.user,
+  password: connectionConfig.password,
+  database: connectionConfig.database,
+  ssl: connectionConfig.ssl ? "enabled" : "disabled",
+  DB_SSL: process.env.DB_SSL,
+})
+
+// Validate required environment variables
+if (!process.env.DB_HOST || !process.env.DB_USER || !process.env.DB_PASSWORD || !process.env.DB_NAME) {
+  console.error("[MySQL] ⚠️  Missing required environment variables:")
+  console.error("   DB_HOST:", process.env.DB_HOST ? "✓" : "✗ MISSING")
+  console.error("   DB_PORT:", process.env.DB_PORT ? "✓" : "✗ MISSING (using default 3306)")
+  console.error("   DB_USER:", process.env.DB_USER ? "✓" : "✗ MISSING")
+  console.error("   DB_PASSWORD:", process.env.DB_PASSWORD ? "✓" : "✗ MISSING")
+  console.error("   DB_NAME:", process.env.DB_NAME ? "✓" : "✗ MISSING")
+}
+
 const pool = mysql.createPool({
   host: process.env.DB_HOST || "localhost",
   port: parseInt(process.env.DB_PORT || "3306"),
@@ -57,6 +87,19 @@ pool.on("error", (err: any) => {
  * Note: For table/column names, use escapeId() before passing to query
  */
 export async function query(sql: string, params?: any[], retries = 2): Promise<any> {
+  // Check if required env vars are set before attempting query
+  if (!process.env.DB_HOST || !process.env.DB_USER || !process.env.DB_PASSWORD || !process.env.DB_NAME) {
+    const missing = []
+    if (!process.env.DB_HOST) missing.push("DB_HOST")
+    if (!process.env.DB_USER) missing.push("DB_USER")
+    if (!process.env.DB_PASSWORD) missing.push("DB_PASSWORD")
+    if (!process.env.DB_NAME) missing.push("DB_NAME")
+    
+    const error = new Error(`Missing required database environment variables: ${missing.join(", ")}. Please configure them in Vercel project settings.`)
+    ;(error as any).code = "ENV_MISSING"
+    throw error
+  }
+
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       const [results] = await pool.execute(sql, params || [])
@@ -65,10 +108,14 @@ export async function query(sql: string, params?: any[], retries = 2): Promise<a
       const isConnectionError = 
         error?.code === "ECONNRESET" ||
         error?.code === "ETIMEDOUT" ||
+        error?.code === "ECONNREFUSED" ||
         error?.code === "PROTOCOL_CONNECTION_LOST" ||
         error?.code === "PROTOCOL_ENQUEUE_AFTER_QUIT" ||
+        error?.code === "ER_ACCESS_DENIED_ERROR" ||
+        error?.code === "ER_BAD_DB_ERROR" ||
         error?.message?.includes("Connection lost") ||
-        error?.message?.includes("read ECONNRESET")
+        error?.message?.includes("read ECONNRESET") ||
+        error?.message?.includes("connect ECONNREFUSED")
       
       if (isConnectionError && attempt < retries) {
         console.warn(`[MySQL] Connection error (attempt ${attempt + 1}/${retries + 1}), retrying...`, error?.code || error?.message)
@@ -77,7 +124,19 @@ export async function query(sql: string, params?: any[], retries = 2): Promise<a
         continue
       }
       
-      console.error("[MySQL] Query error:", error)
+      // Log detailed error information
+      console.error("[MySQL] Query error:", {
+        code: error?.code,
+        errno: error?.errno,
+        sqlState: error?.sqlState,
+        sqlMessage: error?.sqlMessage,
+        message: error?.message,
+        host: process.env.DB_HOST,
+        port: process.env.DB_PORT,
+        database: process.env.DB_NAME,
+        user: process.env.DB_USER,
+      })
+      
       throw error
     }
   }

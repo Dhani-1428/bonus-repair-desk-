@@ -177,18 +177,27 @@ export async function POST(request: NextRequest) {
     
     // Determine specific error message
     let errorMessage = "Failed to create user"
-    if (error?.code === "ECONNREFUSED" || error?.code === "ETIMEDOUT") {
-      errorMessage = "Database connection failed. Please try again later."
+    
+    // Check for missing environment variables
+    if (error?.code === "ENV_MISSING") {
+      errorMessage = error.message || "Database configuration is missing. Please check your environment variables."
+    } else if (error?.code === "ECONNREFUSED" || error?.code === "ETIMEDOUT" || error?.code === "ECONNRESET") {
+      errorMessage = "Database connection failed. Please check your database configuration and network connectivity."
     } else if (error?.code === "ER_ACCESS_DENIED_ERROR") {
-      errorMessage = "Database authentication failed."
+      errorMessage = "Database authentication failed. Please check your database credentials."
     } else if (error?.code === "ER_BAD_DB_ERROR") {
-      errorMessage = `Database '${process.env.DB_NAME}' not found. Please check your database configuration.`
+      errorMessage = `Database '${process.env.DB_NAME || "unknown"}' not found. Please check your database configuration.`
     } else if (error?.code === "ER_NO_SUCH_TABLE") {
       errorMessage = "Database table not found. Please run the database initialization script."
     } else if (error?.code === "ER_DUP_ENTRY") {
       errorMessage = "User with this email already exists."
     } else if (error?.message) {
       errorMessage = error.message
+    }
+    
+    // Add helpful hint for Vercel deployments
+    if (process.env.VERCEL && error?.code !== "ER_DUP_ENTRY") {
+      console.error("[API] ⚠️  Vercel deployment detected. Ensure all DB_* environment variables are set in Vercel project settings.")
     }
     
     return NextResponse.json(
