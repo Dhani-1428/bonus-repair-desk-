@@ -18,10 +18,16 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user already exists
-    const existingUser = await queryOne(
-      `SELECT id FROM users WHERE email = ?`,
-      [email]
-    )
+    let existingUser
+    try {
+      existingUser = await queryOne(
+        `SELECT id FROM users WHERE email = ?`,
+        [email]
+      )
+    } catch (dbError: any) {
+      console.error("[API] Error checking existing user:", dbError?.message || dbError)
+      throw new Error(`Database error: ${dbError?.message || "Failed to check existing users"}`)
+    }
 
     if (existingUser) {
       return NextResponse.json(
@@ -31,18 +37,44 @@ export async function POST(request: NextRequest) {
     }
 
     // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10)
+    let hashedPassword
+    try {
+      hashedPassword = await bcrypt.hash(password, 10)
+    } catch (hashError: any) {
+      console.error("[API] Error hashing password:", hashError?.message || hashError)
+      throw new Error("Failed to process password")
+    }
 
     // Generate IDs
     const userId = uuidv4()
     const tenantId = uuidv4()
 
     // Create user
-    await execute(
-      `INSERT INTO users (id, name, email, password, shopName, contactNumber, role, tenantId)
-       VALUES (?, ?, ?, ?, ?, ?, 'USER', ?)`,
-      [userId, name, email, hashedPassword, shopName || null, contactNumber || null, tenantId]
-    )
+    try {
+      await execute(
+        `INSERT INTO users (id, name, email, password, shopName, contactNumber, role, tenantId)
+         VALUES (?, ?, ?, ?, ?, ?, 'USER', ?)`,
+        [userId, name, email, hashedPassword, shopName || null, contactNumber || null, tenantId]
+      )
+      console.log(`[API] ✅ User created successfully: ${email} (${userId})`)
+    } catch (insertError: any) {
+      console.error("[API] Error inserting user:", insertError?.message || insertError)
+      console.error("[API] Insert error details:", {
+        code: insertError?.code,
+        errno: insertError?.errno,
+        sqlState: insertError?.sqlState,
+        sqlMessage: insertError?.sqlMessage,
+      })
+      
+      if (insertError?.code === "ER_DUP_ENTRY") {
+        return NextResponse.json(
+          { error: "User with this email already exists" },
+          { status: 400 }
+        )
+      }
+      
+      throw new Error(`Failed to create user in database: ${insertError?.sqlMessage || insertError?.message || "Unknown error"}`)
+    }
 
     // Get created user
     let user
