@@ -180,7 +180,7 @@ export async function POST(request: NextRequest) {
     
     // Check for missing environment variables
     if (error?.code === "ENV_MISSING") {
-      errorMessage = error.message || "Database configuration is missing. Please check your environment variables."
+      errorMessage = "Database configuration is missing. Please add DB_HOST, DB_USER, DB_PASSWORD, and DB_NAME in Vercel Settings → Environment Variables, then redeploy. See HOW_TO_SET_VERCEL_ENV_VARS.md for detailed instructions."
     } else if (error?.code === "ECONNREFUSED" || error?.code === "ETIMEDOUT" || error?.code === "ECONNRESET") {
       errorMessage = "Database connection failed. Please check your database configuration and network connectivity."
     } else if (error?.code === "ER_ACCESS_DENIED_ERROR") {
