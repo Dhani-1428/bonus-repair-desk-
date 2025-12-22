@@ -33,22 +33,30 @@ export default function AnalyticsPage() {
 
   useEffect(() => {
     const updateAnalytics = async () => {
+      if (!user?.id) return
+      
       try {
-        const tickets = await getUserData<any[]>("repairTickets", [])
-        // Ensure tickets is always an array
-        const ticketsArray = Array.isArray(tickets) ? tickets : []
+        // Load tickets from API instead of localStorage
+        const response = await fetch(`/api/repairs?userId=${user.id}`)
+        if (!response.ok) {
+          console.error("[Analytics] Failed to load tickets from API")
+          return
+        }
+        
+        const data = await response.json()
+        const ticketsArray = Array.isArray(data.tickets) ? data.tickets : []
         
         const totalRevenue = ticketsArray.reduce((sum: number, ticket: any) => {
-          return sum + (ticket.price || 0)
+          return sum + (parseFloat(ticket.price) || 0)
         }, 0)
 
         const averagePrice = ticketsArray.length > 0 ? totalRevenue / ticketsArray.length : 0
 
         const statusDistribution = {
-          pending: ticketsArray.filter((t: any) => t.status === "pending").length,
-          inProgress: ticketsArray.filter((t: any) => t.status === "in_progress").length,
-          completed: ticketsArray.filter((t: any) => t.status === "completed").length,
-          delivered: ticketsArray.filter((t: any) => t.status === "delivered").length,
+          pending: ticketsArray.filter((t: any) => t.status === "PENDING" || t.status === "pending").length,
+          inProgress: ticketsArray.filter((t: any) => t.status === "IN_PROGRESS" || t.status === "in_progress").length,
+          completed: ticketsArray.filter((t: any) => t.status === "COMPLETED" || t.status === "completed").length,
+          delivered: ticketsArray.filter((t: any) => t.status === "DELIVERED" || t.status === "delivered").length,
         }
 
         const recentDevices = ticketsArray
