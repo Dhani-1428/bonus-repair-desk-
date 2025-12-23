@@ -24,14 +24,26 @@ async function generateRepairNumber(tenantId: string, connection?: mysql.PoolCon
 
     // Use SELECT FOR UPDATE to lock rows and prevent concurrent access
     // This ensures atomic operation - only one request can read at a time
-    const [rows] = await conn.execute(
-      `SELECT repairNumber FROM ${tableName} 
-       WHERE repairNumber LIKE ? OR repairNumber LIKE ?
-       ORDER BY repairNumber DESC
-       LIMIT 1
-       FOR UPDATE`,
-      [`${prefix}%`, `REP-${prefix}%`]
-    ) as any[]
+    // Note: FOR UPDATE works even if table is empty (locks table)
+    let rows: any[] = []
+    try {
+      const result = await conn.execute(
+        `SELECT repairNumber FROM ${tableName} 
+         WHERE repairNumber LIKE ? OR repairNumber LIKE ?
+         ORDER BY repairNumber DESC
+         LIMIT 1
+         FOR UPDATE`,
+        [`${prefix}%`, `REP-${prefix}%`]
+      ) as any[]
+      rows = Array.isArray(result[0]) ? result[0] : []
+    } catch (queryError: any) {
+      // If table doesn't exist or query fails, start from 1
+      if (queryError.code === 'ER_NO_SUCH_TABLE' || queryError.code === '42S02') {
+        rows = []
+      } else {
+        throw queryError
+      }
+    }
 
     let maxSequence = 0
     if (rows && Array.isArray(rows) && rows.length > 0) {
@@ -58,10 +70,17 @@ async function generateRepairNumber(tenantId: string, connection?: mysql.PoolCon
     const repairNumber = `${prefix}${sequence.toString().padStart(4, "0")}`
 
     // Verify it doesn't exist (double check)
-    const [checkRows] = await conn.execute(
-      `SELECT id FROM ${tableName} WHERE repairNumber = ? LIMIT 1`,
-      [repairNumber]
-    ) as any[]
+    let checkRows: any[] = []
+    try {
+      const checkResult = await conn.execute(
+        `SELECT id FROM ${tableName} WHERE repairNumber = ? LIMIT 1`,
+        [repairNumber]
+      ) as any[]
+      checkRows = Array.isArray(checkResult[0]) ? checkResult[0] : []
+    } catch (checkError) {
+      // If check fails, assume it doesn't exist and continue
+      console.warn("[generateRepairNumber] Check query failed, continuing:", checkError)
+    }
 
     if (checkRows && checkRows.length > 0) {
       // If exists, try next number
@@ -124,14 +143,26 @@ async function generateSPU(service: string, tenantId: string, connection?: mysql
 
     // Use SELECT FOR UPDATE to lock rows and prevent concurrent access
     // This ensures atomic operation - only one request can read at a time
-    const [rows] = await conn.execute(
-      `SELECT spu FROM ${tableName} 
-       WHERE spu LIKE ?
-       ORDER BY spu DESC
-       LIMIT 1
-       FOR UPDATE`,
-      [`${spuPrefix}%`]
-    ) as any[]
+    // Note: FOR UPDATE works even if table is empty (locks table)
+    let rows: any[] = []
+    try {
+      const result = await conn.execute(
+        `SELECT spu FROM ${tableName} 
+         WHERE spu LIKE ?
+         ORDER BY spu DESC
+         LIMIT 1
+         FOR UPDATE`,
+        [`${spuPrefix}%`]
+      ) as any[]
+      rows = Array.isArray(result[0]) ? result[0] : []
+    } catch (queryError: any) {
+      // If table doesn't exist or query fails, start from 1
+      if (queryError.code === 'ER_NO_SUCH_TABLE' || queryError.code === '42S02') {
+        rows = []
+      } else {
+        throw queryError
+      }
+    }
 
     let maxSequence = 0
     if (rows && Array.isArray(rows) && rows.length > 0) {
@@ -158,10 +189,17 @@ async function generateSPU(service: string, tenantId: string, connection?: mysql
     const spu = `${spuPrefix}${sequence.toString().padStart(3, "0")}`
 
     // Verify it doesn't exist (double check)
-    const [checkRows] = await conn.execute(
-      `SELECT id FROM ${tableName} WHERE spu = ? LIMIT 1`,
-      [spu]
-    ) as any[]
+    let checkRows: any[] = []
+    try {
+      const checkResult = await conn.execute(
+        `SELECT id FROM ${tableName} WHERE spu = ? LIMIT 1`,
+        [spu]
+      ) as any[]
+      checkRows = Array.isArray(checkResult[0]) ? checkResult[0] : []
+    } catch (checkError) {
+      // If check fails, assume it doesn't exist and continue
+      console.warn("[generateSPU] Check query failed, continuing:", checkError)
+    }
 
     if (checkRows && checkRows.length > 0) {
       // If exists, try next number
@@ -350,10 +388,21 @@ export async function POST(request: NextRequest) {
             ? selectedServices[0]
             : "Other"
           spu = await generateSPU(firstService, user.tenantId, connection)
-        } catch (genError) {
+        } catch (genError: any) {
           console.error("[API] Error generating identifiers:", genError)
-          await connection.rollback()
-          connection.release()
+          console.error("[API] Generation error details:", {
+            message: genError?.message,
+            code: genError?.code,
+            stack: genError?.stack?.substring(0, 500)
+          })
+          if (connection) {
+            try {
+              await connection.rollback()
+              connection.release()
+            } catch (rollbackError) {
+              console.error("[API] Error during rollback:", rollbackError)
+            }
+          }
           throw genError
         }
 
