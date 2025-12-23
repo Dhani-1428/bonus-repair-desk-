@@ -416,11 +416,32 @@ export default function SubscriptionPage() {
                   </div>
                   <ul className="space-y-2">
                     {PLAN_PRICING[plan.id]?.features.map((feature) => {
-                      const featureKey = feature.toLowerCase().replace(/\s+/g, "").replace(/&/g, "").replace(/[^a-z0-9]/g, "");
+                      // Map feature names to translation keys
+                      const featureKeyMap: Record<string, string> = {
+                        "Repair Ticket Management": "repairTicketManagement",
+                        "Customer Database": "customerDatabase",
+                        "Payment Processing": "paymentProcessing",
+                        "Analytics & Reports": "analyticsReports",
+                        "Email Support": "emailSupport",
+                        "Team Management": "teamManagement",
+                        "Everything in 3 Months": "everythingIn3Months",
+                        "Advanced Analytics": "advancedAnalytics",
+                        "Priority Support": "prioritySupport",
+                        "Custom Reports": "customReports",
+                        "API Access": "apiAccess",
+                        "Data Export": "dataExport",
+                        "Everything in 6 Months": "everythingIn6Months",
+                        "Unlimited Tickets": "unlimitedTickets",
+                        "Dedicated Support": "dedicatedSupport",
+                        "Custom Integrations": "customIntegrations",
+                        "White Label Options": "whiteLabelOptions",
+                        "Advanced Security": "advancedSecurity",
+                      };
+                      const translationKey = featureKeyMap[feature] || feature.toLowerCase().replace(/\s+/g, "").replace(/&/g, "").replace(/[^a-z0-9]/g, "");
                       return (
                         <li key={feature} className="flex items-start gap-2">
                           <Check className="w-4 h-4 text-green-400 mt-0.5 shrink-0" />
-                          <span className="text-sm text-gray-300">{t(`feature.${featureKey}`) || feature}</span>
+                          <span className="text-sm text-gray-300">{t(`feature.${translationKey}`) || feature}</span>
                         </li>
                       );
                     })}
