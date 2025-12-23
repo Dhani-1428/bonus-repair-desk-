@@ -1,92 +1,100 @@
 import { NextRequest, NextResponse } from "next/server"
-import { query, queryOne, execute, escapeId } from "@/lib/mysql"
+import { query, queryOne, execute, escapeId, beginTransaction, commit, rollback, getConnection } from "@/lib/mysql"
 import { getTenantTableNames, createTenantTables, tenantTablesExist, migrateTenantTables } from "@/lib/tenant-db"
+import mysql from "mysql2/promise"
 
 // Generate unique Repair Number for tenant (format: YYYY-XXXX)
-// Uses timestamp-based generation to guarantee uniqueness and prevent race conditions
-async function generateRepairNumber(tenantId: string, retryAttempt: number = 0): Promise<string> {
+// Uses database transaction with locking to guarantee atomic operation and prevent race conditions
+async function generateRepairNumber(tenantId: string, connection?: mysql.PoolConnection): Promise<string> {
   const year = new Date().getFullYear()
   const prefix = `${year}-`
 
   const tables = getTenantTableNames(tenantId)
   const tableName = escapeId(tables.repairTickets)
 
-  // Use timestamp + random + retry to generate a guaranteed unique number
-  // This prevents race conditions by making each generation unique from the start
-  const timestamp = Date.now()
-  const randomComponent = Math.floor(Math.random() * 10000)
-  const processId = process.pid || 0
-  const uniqueValue = (timestamp % 100000) + (randomComponent % 10000) + (retryAttempt * 1000) + (processId % 1000)
-  
-  // Get max sequence to maintain sequential appearance where possible
-  const allRepairs = await query(
-    `SELECT repairNumber FROM ${tableName} 
-     WHERE repairNumber LIKE ? OR repairNumber LIKE ?
-     ORDER BY repairNumber DESC LIMIT 1`,
-    [`${prefix}%`, `REP-${prefix}%`]
-  )
-  
-  let baseSequence = 1
-  if (allRepairs && Array.isArray(allRepairs) && allRepairs.length > 0) {
-    for (const repair of allRepairs) {
-      if (!repair || !repair.repairNumber) continue
-      const match = repair.repairNumber.match(/-(\d{4})$/);
-      if (match) {
-        const seq = parseInt(match[1], 10)
-        if (!isNaN(seq)) {
-          baseSequence = seq + 1
-          break
+  // Use connection if provided, otherwise get a new one
+  const useTransaction = !!connection
+  let conn = connection
+
+  try {
+    if (!conn) {
+      conn = await getConnection()
+      await conn.beginTransaction()
+    }
+
+    // Use SELECT FOR UPDATE to lock rows and prevent concurrent access
+    // This ensures atomic operation - only one request can read at a time
+    const [rows] = await conn.execute(
+      `SELECT repairNumber FROM ${tableName} 
+       WHERE repairNumber LIKE ? OR repairNumber LIKE ?
+       ORDER BY repairNumber DESC
+       LIMIT 1
+       FOR UPDATE`,
+      [`${prefix}%`, `REP-${prefix}%`]
+    ) as any[]
+
+    let maxSequence = 0
+    if (rows && Array.isArray(rows) && rows.length > 0) {
+      const repair = rows[0]
+      if (repair && repair.repairNumber) {
+        const match = repair.repairNumber.match(/-(\d{4})$/);
+        if (match) {
+          const seq = parseInt(match[1], 10)
+          if (!isNaN(seq)) {
+            maxSequence = seq
+          }
         }
       }
     }
-  }
 
-  // Generate sequence: use base sequence + unique component to ensure uniqueness
-  // The unique component ensures no two requests get the same number
-  let sequence = baseSequence + (uniqueValue % 1000)
-  
-  // Ensure we don't exceed 9999
-  if (sequence > 9999) {
-    sequence = baseSequence + ((uniqueValue % (10000 - baseSequence)) || 1)
+    // Generate next sequential number
+    let sequence = maxSequence + 1
+    
+    // If we exceed 9999, wrap around
     if (sequence > 9999) {
-      sequence = (uniqueValue % 9999) + 1
+      sequence = 1
     }
-  }
-  
-  // Final safety: if somehow still invalid, use pure timestamp
-  if (sequence <= 0 || sequence > 9999) {
-    sequence = ((timestamp % 9999) || 1)
-  }
 
-  const repairNumber = `${prefix}${sequence.toString().padStart(4, "0")}`
-  
-  // Final verification: check if this number already exists
-  const exists = await queryOne(
-    `SELECT id FROM ${tableName} WHERE repairNumber = ? LIMIT 1`,
-    [repairNumber]
-  )
-  
-  if (exists) {
-    // If it exists, generate a completely new one with higher uniqueness
-    if (retryAttempt < 20) {
-      // Wait a bit and try again with new timestamp
-      await new Promise(resolve => setTimeout(resolve, 10 * retryAttempt))
-      return await generateRepairNumber(tenantId, retryAttempt + 1)
-    } else {
-      // After many retries, use pure timestamp + random to guarantee uniqueness
-      const finalTimestamp = Date.now()
-      const finalRandom = Math.floor(Math.random() * 10000)
-      const finalSequence = ((finalTimestamp % 9999) + (finalRandom % 100)) || 1
-      return `${prefix}${finalSequence.toString().padStart(4, "0")}`
+    const repairNumber = `${prefix}${sequence.toString().padStart(4, "0")}`
+
+    // Verify it doesn't exist (double check)
+    const [checkRows] = await conn.execute(
+      `SELECT id FROM ${tableName} WHERE repairNumber = ? LIMIT 1`,
+      [repairNumber]
+    ) as any[]
+
+    if (checkRows && checkRows.length > 0) {
+      // If exists, try next number
+      sequence = maxSequence + 2
+      if (sequence > 9999) sequence = 1
+      return `${prefix}${sequence.toString().padStart(4, "0")}`
     }
-  }
 
-  return repairNumber
+    // Don't commit if connection was passed in (caller will commit)
+    // Only commit/release if we created the connection ourselves
+    if (!useTransaction && conn) {
+      await conn.commit()
+      conn.release()
+    }
+
+    return repairNumber
+  } catch (error) {
+    // Only rollback/release if we created the connection
+    if (!useTransaction && conn) {
+      try {
+        await conn.rollback()
+        conn.release()
+      } catch (rollbackError) {
+        console.error("[generateRepairNumber] Error during rollback:", rollbackError)
+      }
+    }
+    throw error
+  }
 }
 
 // Generate unique SPU based on service for tenant
-// Uses timestamp-based generation to guarantee uniqueness and prevent race conditions
-async function generateSPU(service: string, tenantId: string, retryAttempt: number = 0): Promise<string> {
+// Uses database transaction with locking to guarantee atomic operation and prevent race conditions
+async function generateSPU(service: string, tenantId: string, connection?: mysql.PoolConnection): Promise<string> {
   const servicePrefixes: { [key: string]: string } = {
     "LCD Repair": "SCR",
     "Screen Replacement": "SCR",
@@ -104,75 +112,84 @@ async function generateSPU(service: string, tenantId: string, retryAttempt: numb
   const tables = getTenantTableNames(tenantId)
   const tableName = escapeId(tables.repairTickets)
 
-  // Use timestamp + random + retry to generate a guaranteed unique number
-  // This prevents race conditions by making each generation unique from the start
-  const timestamp = Date.now()
-  const randomComponent = Math.floor(Math.random() * 1000)
-  const processId = process.pid || 0
-  const uniqueValue = (timestamp % 10000) + (randomComponent % 1000) + (retryAttempt * 100) + (processId % 100)
-  
-  // Get max sequence to maintain sequential appearance where possible
-  const allSPUs = await query(
-    `SELECT spu FROM ${tableName} WHERE spu LIKE ? ORDER BY spu DESC LIMIT 1`,
-    [`${spuPrefix}%`]
-  )
-  
-  let baseSequence = 1
-  if (allSPUs && Array.isArray(allSPUs) && allSPUs.length > 0) {
-    for (const spuRecord of allSPUs) {
-      if (!spuRecord || !spuRecord.spu) continue
-      const match = spuRecord.spu.match(/-(\d+)$/)
-      if (match) {
-        const seq = parseInt(match[1], 10)
-        if (!isNaN(seq)) {
-          baseSequence = seq + 1
-          break
+  // Use connection if provided, otherwise get a new one
+  const useTransaction = !!connection
+  let conn = connection
+
+  try {
+    if (!conn) {
+      conn = await getConnection()
+      await conn.beginTransaction()
+    }
+
+    // Use SELECT FOR UPDATE to lock rows and prevent concurrent access
+    // This ensures atomic operation - only one request can read at a time
+    const [rows] = await conn.execute(
+      `SELECT spu FROM ${tableName} 
+       WHERE spu LIKE ?
+       ORDER BY spu DESC
+       LIMIT 1
+       FOR UPDATE`,
+      [`${spuPrefix}%`]
+    ) as any[]
+
+    let maxSequence = 0
+    if (rows && Array.isArray(rows) && rows.length > 0) {
+      const spuRecord = rows[0]
+      if (spuRecord && spuRecord.spu) {
+        const match = spuRecord.spu.match(/-(\d+)$/)
+        if (match) {
+          const seq = parseInt(match[1], 10)
+          if (!isNaN(seq)) {
+            maxSequence = seq
+          }
         }
       }
     }
-  }
 
-  // Generate sequence: use base sequence + unique component to ensure uniqueness
-  // The unique component ensures no two requests get the same number
-  let sequence = baseSequence + (uniqueValue % 100)
-  
-  // Ensure we don't exceed 999
-  if (sequence > 999) {
-    sequence = baseSequence + ((uniqueValue % (1000 - baseSequence)) || 1)
+    // Generate next sequential number
+    let sequence = maxSequence + 1
+    
+    // If we exceed 999, wrap around
     if (sequence > 999) {
-      sequence = (uniqueValue % 999) + 1
+      sequence = 1
     }
-  }
-  
-  // Final safety: if somehow still invalid, use pure timestamp
-  if (sequence <= 0 || sequence > 999) {
-    sequence = ((timestamp % 999) || 1)
-  }
 
-  const spu = `${spuPrefix}${sequence.toString().padStart(3, "0")}`
-  
-  // Final verification: check if this SPU already exists
-  const exists = await queryOne(
-    `SELECT id FROM ${tableName} WHERE spu = ? LIMIT 1`,
-    [spu]
-  )
-  
-  if (exists) {
-    // If it exists, generate a completely new one with higher uniqueness
-    if (retryAttempt < 20) {
-      // Wait a bit and try again with new timestamp
-      await new Promise(resolve => setTimeout(resolve, 10 * retryAttempt))
-      return await generateSPU(service, tenantId, retryAttempt + 1)
-    } else {
-      // After many retries, use pure timestamp + random to guarantee uniqueness
-      const finalTimestamp = Date.now()
-      const finalRandom = Math.floor(Math.random() * 1000)
-      const finalSequence = ((finalTimestamp % 999) + (finalRandom % 100)) || 1
-      return `${spuPrefix}${finalSequence.toString().padStart(3, "0")}`
+    const spu = `${spuPrefix}${sequence.toString().padStart(3, "0")}`
+
+    // Verify it doesn't exist (double check)
+    const [checkRows] = await conn.execute(
+      `SELECT id FROM ${tableName} WHERE spu = ? LIMIT 1`,
+      [spu]
+    ) as any[]
+
+    if (checkRows && checkRows.length > 0) {
+      // If exists, try next number
+      sequence = maxSequence + 2
+      if (sequence > 999) sequence = 1
+      return `${spuPrefix}${sequence.toString().padStart(3, "0")}`
     }
-  }
 
-  return spu
+    // Don't commit if connection was passed in (caller will commit)
+    // Only commit/release if we created the connection ourselves
+    if (!useTransaction && conn) {
+      await conn.commit()
+      conn.release()
+    }
+
+    return spu
+  } catch (error) {
+    // Only rollback/release if we created the connection
+    if (!useTransaction && conn) {
+      try {
+        await conn.rollback()
+        conn.release()
+      } catch (rollbackError) {
+        console.error("[generateSPU] Error during rollback:", rollbackError)
+      }
+    }
+    throw error
+  }
 }
 
 // Generate unique Serial Number for tenant
@@ -307,64 +324,44 @@ export async function POST(request: NextRequest) {
     // Client ID is required and provided by user (no auto-generation)
     const finalClientId = clientId.trim()
 
-    // Retry mechanism to handle race conditions and duplicate entry errors
-    const maxRetries = 20
+    // Use database transaction to ensure atomic operation
+    // This prevents race conditions by locking rows during generation and insert
+    const maxRetries = 10
     let attempts = 0
     let ticket: any = null
     let lastError: any = null
 
     while (attempts < maxRetries) {
       attempts++
+      let connection: mysql.PoolConnection | null = null
       
       try {
-        // Generate unique identifiers with retry attempt number
-        // Each generation uses timestamp + random + retry to ensure uniqueness
+        // Start transaction with connection
+        connection = await getConnection()
+        await connection.beginTransaction()
+
+        // Generate unique identifiers within transaction (with locking)
         let repairNumber: string
         let spu: string
         
         try {
-          // Add small random delay to spread out concurrent requests
-          if (attempts > 1) {
-            await new Promise(resolve => setTimeout(resolve, Math.random() * 50 * attempts))
-          }
-          
-          repairNumber = await generateRepairNumber(user.tenantId, attempts - 1)
+          repairNumber = await generateRepairNumber(user.tenantId, connection)
           const firstService = Array.isArray(selectedServices) && selectedServices.length > 0
             ? selectedServices[0]
             : "Other"
-          spu = await generateSPU(firstService, user.tenantId, attempts - 1)
+          spu = await generateSPU(firstService, user.tenantId, connection)
         } catch (genError) {
           console.error("[API] Error generating identifiers:", genError)
-          // Fallback generation with timestamp to ensure uniqueness
-          const timestamp = Date.now()
-          const randomSuffix = Math.floor(Math.random() * 10000)
-          repairNumber = `${new Date().getFullYear()}-${((timestamp % 10000) + randomSuffix % 100).toString().padStart(4, "0")}`
-          spu = `SPU-OTH-${((timestamp % 999) + randomSuffix % 100).toString().padStart(3, "0")}`
+          await connection.rollback()
+          connection.release()
+          throw genError
         }
 
-        // Final check before insert - verify both numbers are unique
-        const existingRepair = await queryOne(
-          `SELECT id FROM ${tableName} WHERE repairNumber = ? LIMIT 1`,
-          [repairNumber]
-        )
-        
-        const existingSPU = await queryOne(
-          `SELECT id FROM ${tableName} WHERE spu = ? LIMIT 1`,
-          [spu]
-        )
-        
-        if (existingRepair || existingSPU) {
-          console.log(`[API] Pre-insert duplicate check found existing record. Repair: ${!!existingRepair}, SPU: ${!!existingSPU}. Regenerating...`)
-          // Add exponential backoff delay before retry
-          await new Promise(resolve => setTimeout(resolve, 100 * attempts + Math.random() * 50))
-          continue
-        }
-
-        // Create repair ticket in tenant-specific table
+        // Create repair ticket in tenant-specific table within same transaction
         const ticketId = `ticket_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 
-        // Try to insert - this will throw ER_DUP_ENTRY if repairNumber or spu already exists
-        await execute(
+        // Insert within transaction
+        await connection.execute(
           `INSERT INTO ${tableName} (id, userId, repairNumber, spu, clientId, customerName, contact, imeiNo,
             brand, model, serialNo, softwareVersion, warranty, simCard, memoryCard,
             charger, battery, waterDamaged, loanEquipment, equipmentObs, repairObs,
@@ -400,6 +397,11 @@ export async function POST(request: NextRequest) {
           ]
         )
 
+        // Commit transaction
+        await connection.commit()
+        connection.release()
+        connection = null
+
         // Fetch created ticket
         ticket = await queryOne(
           `SELECT * FROM ${tableName} WHERE id = ?`,
@@ -413,6 +415,17 @@ export async function POST(request: NextRequest) {
         break
       } catch (error: any) {
         lastError = error
+        
+        // Clean up connection if it exists
+        if (connection) {
+          try {
+            await connection.rollback()
+            connection.release()
+          } catch (rollbackError) {
+            console.error("[API] Error during rollback:", rollbackError)
+          }
+          connection = null
+        }
         
         // If it's a duplicate entry error, retry with new numbers
         if (error.code === "ER_DUP_ENTRY") {
