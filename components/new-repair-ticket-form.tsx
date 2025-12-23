@@ -616,15 +616,15 @@ export function NewRepairTicketForm() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label className="text-gray-200">Computer Serial Number *</Label>
+                    <Label className="text-gray-200">Laptop Serial Number *</Label>
                     <Input
-                      placeholder="Enter computer serial number"
+                      placeholder="Enter laptop serial number"
                       value={device.serialNo || ""}
                       onChange={(e) => updateDevice(deviceIndex, "serialNo", e.target.value)}
                       required
                       className="bg-gray-800/50 border-gray-700 text-white placeholder:text-gray-500 focus:border-blue-500"
                     />
-                    <p className="text-xs text-gray-500">Enter the computer serial number</p>
+                    <p className="text-xs text-gray-500">Enter the laptop serial number</p>
                   </div>
 
                   <div className="space-y-2">
@@ -1033,7 +1033,7 @@ export function printReceiptForTickets(tickets: any[]) {
             <div style="display: table-cell; width: 60%; font-size: 7pt;">${ticket.brand || "N/A"} - ${ticket.model || "N/A"}</div>
           </div>
           <div style="display: table; width: 100%; margin: 1px 0;">
-            <div style="display: table-cell; width: 40%; font-weight: bold; font-size: 7pt;">Computer Serial Nº:</div>
+            <div style="display: table-cell; width: 40%; font-weight: bold; font-size: 7pt;">Laptop Serial Nº:</div>
             <div style="display: table-cell; width: 60%; font-size: 7pt;">${ticket.serialNo || "-"}</div>
           </div>
           <div style="display: table; width: 100%; margin: 1px 0;">
