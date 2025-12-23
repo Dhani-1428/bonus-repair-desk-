@@ -5,6 +5,37 @@
 
 import mysql from "mysql2/promise"
 
+/**
+ * Convert a Date object or ISO string to MySQL DATETIME format (YYYY-MM-DD HH:MM:SS)
+ * MySQL DATETIME doesn't support timezone or milliseconds
+ */
+export function toMySQLDateTime(date: Date | string | null | undefined): string | null {
+  if (!date) return null
+  
+  let dateObj: Date
+  if (typeof date === "string") {
+    // Remove timezone info and parse
+    const cleaned = date.replace(/Z$/, "").replace(/\.\d{3}$/, "")
+    dateObj = new Date(cleaned)
+  } else {
+    dateObj = date
+  }
+  
+  if (isNaN(dateObj.getTime())) {
+    throw new Error(`Invalid date: ${date}`)
+  }
+  
+  // Format as YYYY-MM-DD HH:MM:SS
+  const year = dateObj.getFullYear()
+  const month = String(dateObj.getMonth() + 1).padStart(2, "0")
+  const day = String(dateObj.getDate()).padStart(2, "0")
+  const hours = String(dateObj.getHours()).padStart(2, "0")
+  const minutes = String(dateObj.getMinutes()).padStart(2, "0")
+  const seconds = String(dateObj.getSeconds()).padStart(2, "0")
+  
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
+}
+
 // Connection pool configuration
 const getSSLConfig = () => {
   // For Aiven or any cloud database requiring SSL

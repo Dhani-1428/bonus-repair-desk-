@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { query, queryOne, execute } from "@/lib/mysql"
+import { query, queryOne, execute, toMySQLDateTime } from "@/lib/mysql"
 import { v4 as uuidv4 } from "uuid"
 import { sendAdminSubscriptionPurchaseNotification, sendAdminPaymentRequestNotification, sendPaymentApprovedEmail, sendPaymentRejectedEmail, sendPaymentReceiptEmail } from "@/lib/email-service"
 
@@ -251,7 +251,7 @@ export async function POST(request: NextRequest) {
         `INSERT INTO payment_requests 
          (id, userId, tenantId, plan, planName, price, months, startDate, endDate, status)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')`,
-        [paymentId, userId, user.tenantId, plan, planName, parsedPrice, parsedMonths, startDate, endDate]
+        [paymentId, userId, user.tenantId, plan, planName, parsedPrice, parsedMonths, mysqlStartDate, mysqlEndDate]
       )
       console.log("[API] ✅ Payment request inserted into database successfully")
     } catch (dbError: any) {
@@ -518,12 +518,16 @@ export async function PUT(request: NextRequest) {
         subscriptionId = existing.id
       } else {
         subscriptionId = uuidv4()
-        await execute(
-          `INSERT INTO subscriptions 
-           (id, userId, tenantId, plan, status, startDate, endDate, price, paymentStatus, paymentId, isFreeTrial)
-           VALUES (?, ?, ?, ?, 'ACTIVE', ?, ?, ?, 'APPROVED', ?, FALSE)`,
-          [subscriptionId, payment.userId, payment.tenantId, payment.plan, payment.startDate, payment.endDate, payment.price, id]
-        )
+          // Convert dates to MySQL format
+          const newSubscriptionStartDate = toMySQLDateTime(payment.startDate) || ""
+          const newSubscriptionEndDate = toMySQLDateTime(payment.endDate) || ""
+          
+          await execute(
+            `INSERT INTO subscriptions 
+             (id, userId, tenantId, plan, status, startDate, endDate, price, paymentStatus, paymentId, isFreeTrial)
+             VALUES (?, ?, ?, ?, 'ACTIVE', ?, ?, ?, 'APPROVED', ?, FALSE)`,
+            [subscriptionId, payment.userId, payment.tenantId, payment.plan, newSubscriptionStartDate, newSubscriptionEndDate, payment.price, id]
+          )
       }
 
       // Send email to user about payment approval
