@@ -223,19 +223,23 @@ export async function POST(request: NextRequest) {
     }
 
     // Convert ISO date strings to MySQL DATETIME format
-    let mysqlStartDate: string
-    let mysqlEndDate: string
+    let mysqlStartDate: string = ""
+    let mysqlEndDate: string = ""
+    
     try {
-      mysqlStartDate = toMySQLDateTime(startDate) || ""
-      mysqlEndDate = toMySQLDateTime(endDate) || ""
+      const convertedStartDate = toMySQLDateTime(startDate)
+      const convertedEndDate = toMySQLDateTime(endDate)
       
-      if (!mysqlStartDate || !mysqlEndDate) {
+      if (!convertedStartDate || !convertedEndDate) {
         console.error("[API] ❌ Invalid date format:", { startDate, endDate })
         return NextResponse.json(
           { error: "Invalid date format. Dates must be valid ISO strings or Date objects." },
           { status: 400 }
         )
       }
+      
+      mysqlStartDate = convertedStartDate
+      mysqlEndDate = convertedEndDate
       
       console.log("[API] Converted dates to MySQL format:", {
         originalStartDate: startDate,
@@ -251,6 +255,15 @@ export async function POST(request: NextRequest) {
           details: dateError?.message || "Dates must be valid ISO strings or Date objects",
         },
         { status: 400 }
+      )
+    }
+    
+    // Ensure variables are set before use
+    if (!mysqlStartDate || !mysqlEndDate) {
+      console.error("[API] ❌ mysqlStartDate or mysqlEndDate is empty after conversion")
+      return NextResponse.json(
+        { error: "Failed to convert dates to MySQL format" },
+        { status: 500 }
       )
     }
 
