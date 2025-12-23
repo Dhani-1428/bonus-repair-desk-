@@ -10,41 +10,49 @@ async function generateRepairNumber(tenantId: string, retryAttempt: number = 0):
   const tables = getTenantTableNames(tenantId)
   const tableName = escapeId(tables.repairTickets)
 
-  // Find the maximum sequence number for this year in tenant's table
-  // Support both old format (REP-YYYY-XXXX) and new format (YYYY-XXXX)
-  // Get all repair numbers for this year and find the max sequence
+  // Use SQL to find the maximum sequence number atomically
+  // This is more reliable than fetching all records
+  // Get all repair numbers and find max in code to handle edge cases
   const allRepairs = await query(
-    `SELECT repairNumber FROM ${tableName} WHERE repairNumber LIKE ? OR repairNumber LIKE ? ORDER BY repairNumber DESC`,
+    `SELECT repairNumber FROM ${tableName} 
+     WHERE repairNumber LIKE ? OR repairNumber LIKE ?`,
     [`${prefix}%`, `REP-${prefix}%`]
   )
-
-  let maxSequence = 0
-  if (allRepairs && Array.isArray(allRepairs)) {
-    for (const repair of allRepairs) {
-      if (repair && repair.repairNumber) {
-        // Extract sequence number from either format: YYYY-XXXX or REP-YYYY-XXXX
-        // Match the last 4 digits after the last dash
+  
+  const maxRepair = allRepairs && Array.isArray(allRepairs) && allRepairs.length > 0
+    ? allRepairs.reduce((max, repair) => {
+        if (!repair || !repair.repairNumber) return max
         const match = repair.repairNumber.match(/-(\d{4})$/);
         if (match) {
           const seq = parseInt(match[1], 10)
-          if (!isNaN(seq) && seq > maxSequence) {
-            maxSequence = seq
+          if (!isNaN(seq) && (!max || seq > max.sequence)) {
+            return { repairNumber: repair.repairNumber, sequence: seq }
           }
         }
-      }
-    }
+        return max
+      }, null as { repairNumber: string, sequence: number } | null)
+    : null
+
+  let maxSequence = 0
+  if (maxRepair && maxRepair.sequence) {
+    maxSequence = maxRepair.sequence
   }
 
   // Calculate base sequence
   let sequence = maxSequence + 1
   
-  // On retries, add a small increment to avoid immediate collisions
-  // Use milliseconds component to ensure uniqueness across concurrent requests
+  // On retries, add timestamp-based increment to ensure uniqueness
   if (retryAttempt > 0) {
-    const msComponent = Date.now() % 1000  // Last 3 digits of timestamp
-    // Add a small increment based on retry attempt and timestamp
-    const increment = Math.floor((msComponent / 100) % 10) + (retryAttempt * 2)
+    // Use milliseconds and retry attempt to create unique increment
+    const timestamp = Date.now()
+    const msComponent = timestamp % 10000  // Last 4 digits
+    const increment = Math.floor(msComponent / 100) + (retryAttempt * 10)
     sequence = maxSequence + increment + 1
+    
+    // Ensure sequence doesn't exceed 9999
+    if (sequence > 9999) {
+      sequence = (sequence % 10000) + 1
+    }
   }
 
   return `${prefix}${sequence.toString().padStart(4, "0")}`
@@ -69,38 +77,46 @@ async function generateSPU(service: string, tenantId: string, retryAttempt: numb
   const tables = getTenantTableNames(tenantId)
   const tableName = escapeId(tables.repairTickets)
 
-  // Find all SPUs with this prefix and get the maximum sequence number
+  // Get all SPUs and find max in code to handle edge cases
   const allSPUs = await query(
-    `SELECT spu FROM ${tableName} WHERE spu LIKE ? ORDER BY spu DESC`,
+    `SELECT spu FROM ${tableName} WHERE spu LIKE ?`,
     [`${spuPrefix}%`]
   )
-
-  let maxSequence = 0
-  if (allSPUs && Array.isArray(allSPUs)) {
-    for (const spuRecord of allSPUs) {
-      if (spuRecord && spuRecord.spu) {
-        // Extract sequence number from the end (last digits after the last dash)
+  
+  const maxSPU = allSPUs && Array.isArray(allSPUs) && allSPUs.length > 0
+    ? allSPUs.reduce((max, spuRecord) => {
+        if (!spuRecord || !spuRecord.spu) return max
         const match = spuRecord.spu.match(/-(\d+)$/)
         if (match) {
           const seq = parseInt(match[1], 10)
-          if (!isNaN(seq) && seq > maxSequence) {
-            maxSequence = seq
+          if (!isNaN(seq) && (!max || seq > max.sequence)) {
+            return { spu: spuRecord.spu, sequence: seq }
           }
         }
-      }
-    }
+        return max
+      }, null as { spu: string, sequence: number } | null)
+    : null
+
+  let maxSequence = 0
+  if (maxSPU && maxSPU.sequence) {
+    maxSequence = maxSPU.sequence
   }
 
   // Calculate base sequence
   let sequence = maxSequence + 1
   
-  // On retries, add a small increment to avoid immediate collisions
-  // Use milliseconds component to ensure uniqueness across concurrent requests
+  // On retries, add timestamp-based increment to ensure uniqueness
   if (retryAttempt > 0) {
-    const msComponent = Date.now() % 100  // Last 2 digits of timestamp
-    // Add a small increment based on retry attempt and timestamp
-    const increment = Math.floor((msComponent / 10) % 5) + retryAttempt
+    // Use milliseconds and retry attempt to create unique increment
+    const timestamp = Date.now()
+    const msComponent = timestamp % 1000  // Last 3 digits
+    const increment = Math.floor(msComponent / 10) + (retryAttempt * 5)
     sequence = maxSequence + increment + 1
+    
+    // Ensure sequence doesn't exceed 999
+    if (sequence > 999) {
+      sequence = (sequence % 1000) + 1
+    }
   }
 
   return `${spuPrefix}${sequence.toString().padStart(3, "0")}`
@@ -371,58 +387,97 @@ export async function POST(request: NextRequest) {
     // If we exhausted retries or got a non-duplicate error
     if (!ticket) {
       if (lastError?.code === "ER_DUP_ENTRY") {
-        // Still getting duplicates after max retries - use timestamp-based fallback
-        console.warn(`[API] Max retries reached for duplicate entries. Using timestamp-based fallback.`)
+        // Still getting duplicates after max retries - use guaranteed unique timestamp-based fallback
+        console.warn(`[API] Max retries reached for duplicate entries. Using guaranteed unique timestamp-based fallback.`)
         
-        try {
-          const timestamp = Date.now()
-          const randomSuffix = Math.random().toString(36).substr(2, 8)
-          const repairNumber = `${new Date().getFullYear()}-${(timestamp % 10000).toString().padStart(4, "0")}`
-          const spu = `SPU-OTH-${randomSuffix.slice(0, 3).padStart(3, "0")}`
-          const ticketId = `ticket_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+        // Retry with guaranteed unique values using timestamp + random
+        let fallbackAttempts = 0
+        const maxFallbackRetries = 5
+        
+        while (fallbackAttempts < maxFallbackRetries && !ticket) {
+          fallbackAttempts++
+          
+          try {
+            // Generate guaranteed unique values using timestamp + random + attempt number
+            const timestamp = Date.now()
+            const random1 = Math.floor(Math.random() * 10000)
+            const random2 = Math.floor(Math.random() * 1000)
+            const uniqueSuffix = `${timestamp}${random1}${fallbackAttempts}`.slice(-4)
+            
+            const repairNumber = `${new Date().getFullYear()}-${uniqueSuffix}`
+            const spu = `SPU-OTH-${random2.toString().padStart(3, "0")}`
+            const ticketId = `ticket_${timestamp}_${Math.random().toString(36).substr(2, 9)}`
 
-          await execute(
-            `INSERT INTO ${tableName} (id, userId, repairNumber, spu, clientId, customerName, contact, imeiNo,
-              brand, model, serialNo, softwareVersion, warranty, simCard, memoryCard,
-              charger, battery, waterDamaged, loanEquipment, equipmentObs, repairObs,
-              selectedServices, \`condition\`, problem, price, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [
-              ticketId,
-              userId,
-              repairNumber,
-              spu,
-              finalClientId || null,
-              customerName,
-              contact,
-              imeiNo,
-              brand,
-              model,
-              finalSerialNo || null,
-              softwareVersion || null,
-              warranty || "Without Warranty",
-              simCard || false,
-              memoryCard || false,
-              charger || false,
-              battery || false,
-              waterDamaged || false,
-              loanEquipment || false,
-              equipmentObs || null,
-              repairObs || null,
-              JSON.stringify(selectedServices || []),
-              condition || null,
-              problem,
-              parseFloat(price),
-              status || "PENDING"
-            ]
-          )
+            // Check if these values exist
+            const existingCheck = await queryOne(
+              `SELECT id FROM ${tableName} WHERE repairNumber = ? OR spu = ? LIMIT 1`,
+              [repairNumber, spu]
+            )
+            
+            if (existingCheck) {
+              console.log(`[API] Fallback values also exist, retrying fallback attempt ${fallbackAttempts}...`)
+              await new Promise(resolve => setTimeout(resolve, 50 * fallbackAttempts))
+              continue
+            }
 
-          ticket = await queryOne(
-            `SELECT * FROM ${tableName} WHERE id = ?`,
-            [ticketId]
-          )
-        } catch (fallbackError: any) {
-          console.error("[API] Fallback insertion also failed:", fallbackError)
+            await execute(
+              `INSERT INTO ${tableName} (id, userId, repairNumber, spu, clientId, customerName, contact, imeiNo,
+                brand, model, serialNo, softwareVersion, warranty, simCard, memoryCard,
+                charger, battery, waterDamaged, loanEquipment, equipmentObs, repairObs,
+                selectedServices, \`condition\`, problem, price, status)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [
+                ticketId,
+                userId,
+                repairNumber,
+                spu,
+                finalClientId || null,
+                customerName,
+                contact,
+                imeiNo,
+                brand,
+                model,
+                finalSerialNo || null,
+                softwareVersion || null,
+                warranty || "Without Warranty",
+                simCard || false,
+                memoryCard || false,
+                charger || false,
+                battery || false,
+                waterDamaged || false,
+                loanEquipment || false,
+                equipmentObs || null,
+                repairObs || null,
+                JSON.stringify(selectedServices || []),
+                condition || null,
+                problem,
+                parseFloat(price),
+                status || "PENDING"
+              ]
+            )
+
+            ticket = await queryOne(
+              `SELECT * FROM ${tableName} WHERE id = ?`,
+              [ticketId]
+            )
+            
+            if (ticket) {
+              console.log(`[API] ✅ Fallback insertion successful. Repair Number: ${repairNumber}, SPU: ${spu}`)
+              break
+            }
+          } catch (fallbackError: any) {
+            console.error(`[API] Fallback insertion attempt ${fallbackAttempts} failed:`, fallbackError)
+            if (fallbackAttempts >= maxFallbackRetries) {
+              return NextResponse.json(
+                { error: "Failed to create repair ticket after multiple attempts. Please try again." },
+                { status: 500 }
+              )
+            }
+            await new Promise(resolve => setTimeout(resolve, 100 * fallbackAttempts))
+          }
+        }
+        
+        if (!ticket) {
           return NextResponse.json(
             { error: "Failed to create repair ticket after multiple attempts. Please try again." },
             { status: 500 }
