@@ -119,11 +119,7 @@ export function RepairTicketList() {
                     </td>
                     <td className="px-4 py-3 text-sm border-r border-gray-800/30 whitespace-nowrap">
                       <Badge className={`${getStatusColor(ticket.status)} text-xs px-2 py-1`}>
-                        {ticket.status === "PENDING" || ticket.status === "pending" ? t("status.pending") :
-                         ticket.status === "IN_PROGRESS" || ticket.status === "in_progress" ? t("status.in_progress") :
-                         ticket.status === "COMPLETED" || ticket.status === "completed" ? t("status.completed") :
-                         ticket.status === "DELIVERED" || ticket.status === "delivered" ? t("status.delivered") :
-                         ticket.status.replace("_", " ")}
+                        {ticket.status.replace("_", " ")}
                       </Badge>
                     </td>
                     <td className="px-4 py-3 text-sm font-bold text-white border-r border-gray-800/30 whitespace-nowrap">
