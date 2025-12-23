@@ -388,9 +388,7 @@ export default function SubscriptionPage() {
                 <CardHeader className="pb-4">
                   <CardTitle className="text-xl text-white">{plan.name}</CardTitle>
                   <CardDescription className="text-gray-400">
-                    {plan.period === "1 month" ? t("subscription.monthSubscription") :
-                     plan.period === "3 months" ? t("subscription.threeMonthSubscription") :
-                     plan.period === "6 months" ? t("subscription.sixMonthSubscription") :
+                    {plan.period === "6 months" ? t("subscription.sixMonthSubscription") :
                      plan.period === "12 months" ? t("subscription.twelveMonthSubscription") :
                      `${plan.period} subscription`}
                   </CardDescription>
