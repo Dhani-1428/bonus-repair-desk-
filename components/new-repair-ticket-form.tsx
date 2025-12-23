@@ -1065,10 +1065,15 @@ export function printReceiptForTickets(tickets: any[]) {
         </div>
         
         <!-- Tearing Line and Gap (Center) -->
-        <div style="width: 100%; flex: 0 0 auto; margin: 10mm 0; padding: 0; text-align: center; position: relative; page-break-inside: avoid !important; break-inside: avoid !important;">
-          <!-- Tearing line with perforated pattern -->
-          <div style="border-top: 3px dashed #000; border-bottom: 3px dashed #000; margin: 0; padding: 3mm 0; position: relative; background: repeating-linear-gradient(to right, transparent, transparent 2mm, #ddd 2mm, #ddd 3mm);">
-            <div style="text-align: center; font-size: 6pt; color: #666; margin-top: 1mm; font-weight: bold; letter-spacing: 2px;">TEAR HERE</div>
+        <div style="width: 100%; flex: 0 0 auto; margin: 15mm 0; padding: 5mm 0; text-align: center; position: relative; page-break-inside: avoid !important; break-inside: avoid !important;">
+          <!-- Cutting line with dotted pattern -->
+          <div style="width: 100%; margin: 0; padding: 2mm 0; position: relative;">
+            <!-- Dotted cutting line -->
+            <div style="border-top: 2px dotted #000; border-bottom: 2px dotted #000; margin: 0 auto; padding: 2mm 0; width: 100%; position: relative;">
+              <div style="text-align: center; font-size: 7pt; color: #000; margin: 1mm 0; font-weight: bold; letter-spacing: 3px;">✂️ CUT HERE ✂️</div>
+            </div>
+            <!-- Additional dotted line for better visibility -->
+            <div style="border-top: 1px dotted #666; margin: 1mm auto 0; width: 100%;"></div>
           </div>
         </div>
         
