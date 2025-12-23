@@ -22,10 +22,11 @@ interface DeviceFormData {
   imeiNo: string
   serialNo: string
   warrantyUntil30Days: boolean
-  battery: boolean
-  charger: boolean
   simCard: boolean
   memoryCard: boolean
+  charger: boolean
+  battery: boolean
+  waterDamaged: boolean
   loanEquipment: boolean
   equipmentObs: string
   repairObs: string
@@ -35,7 +36,6 @@ interface DeviceFormData {
   problem: string
   price: string
   imeiError: string | null
-  spu?: string // Auto-generated, read-only
   repairNumber?: string // Auto-generated, read-only
 }
 
@@ -95,10 +95,11 @@ export function NewRepairTicketForm() {
       imeiNo: "",
       serialNo: "",
       warrantyUntil30Days: false,
-      battery: false,
-      charger: false,
       simCard: false,
       memoryCard: false,
+      charger: false,
+      battery: false,
+      waterDamaged: false,
       loanEquipment: false,
       equipmentObs: "",
       repairObs: "",
@@ -113,31 +114,6 @@ export function NewRepairTicketForm() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showConditionDialog, setShowConditionDialog] = useState<number | null>(null)
   const [showCustomConditionDialog, setShowCustomConditionDialog] = useState<number | null>(null)
-  
-  // Service to SPU code mapping (same as API)
-  const SERVICE_SPU_MAP: Record<string, string> = {
-    "LCD Repair": "SCR",
-    "Phone dead": "PWR",
-    "Restarting problem": "RST",
-    "Software problem": "SWR",
-    "Camera": "CAM",
-    "Back Panel": "BKP",
-    "Mobile Body Replacement": "BDY",
-    "Network Issue": "NET",
-    "Battery Replacement": "BAT",
-    "Charging Port & Power issue": "CHG",
-    "Software & Os troubleshooting": "SFT",
-    "Speaker repair": "SPK",
-    "Water Damage Treatment": "WTR",
-  }
-
-  // Generate preview SPU based on selected service
-  const getSPUPreview = (device: DeviceFormData): string => {
-    if (device.selectedServices.length === 0) return "Will be generated"
-    const primaryService = device.selectedServices[0]
-    const serviceCode = SERVICE_SPU_MAP[primaryService] || "GEN"
-    return `SPU-${serviceCode}-XXX` // XXX will be replaced with actual sequence on server
-  }
 
   // Generate preview Repair Number
   const getRepairNumberPreview = (): string => {
@@ -211,14 +187,6 @@ export function NewRepairTicketForm() {
     )
   }
 
-  // Generate SPU based on service (client-side)
-  const generateSPUClient = (service: string, existingTickets: any[]): string => {
-    const serviceCode = SERVICE_SPU_MAP[service] || "GEN"
-    const prefix = `SPU-${serviceCode}-`
-    const matchingTickets = existingTickets.filter(t => t.spu?.startsWith(prefix))
-    const sequence = String(matchingTickets.length + 1).padStart(3, "0")
-    return `${prefix}${sequence}`
-  }
 
   // Generate Repair Number (client-side) - Format: YYYY-XXXX
   const generateRepairNumberClient = (existingTickets: any[]): string => {
@@ -292,10 +260,11 @@ export function NewRepairTicketForm() {
             model: device.model,
             serialNo: device.serialNo || null,
             warranty: device.warrantyUntil30Days ? "Warranty Until 30 days" : "Without Warranty",
-            battery: device.battery,
-            charger: device.charger,
             simCard: device.simCard,
             memoryCard: device.memoryCard,
+            charger: device.charger,
+            battery: device.battery,
+            waterDamaged: device.waterDamaged,
             loanEquipment: device.loanEquipment,
             equipmentObs: device.equipmentObs || null,
             repairObs: device.repairObs || null,
@@ -353,10 +322,11 @@ export function NewRepairTicketForm() {
             model: ticket.model || device.model,
             serialNo: ticket.serialNo || null,
             warranty: ticket.warranty || "Without Warranty",
-            battery: ticket.battery ?? false,
-            charger: ticket.charger ?? false,
             simCard: ticket.simCard ?? false,
             memoryCard: ticket.memoryCard ?? false,
+            charger: ticket.charger ?? false,
+            battery: ticket.battery ?? false,
+            waterDamaged: ticket.waterDamaged ?? false,
             loanEquipment: ticket.loanEquipment ?? false,
             equipmentObs: ticket.equipmentObs || null,
             repairObs: ticket.repairObs || null,
@@ -365,7 +335,6 @@ export function NewRepairTicketForm() {
             problem: ticket.problem || device.problem,
             price: ticket.price || parseFloat(device.price),
             repairNumber: ticket.repairNumber || "N/A",
-            spu: ticket.spu || "N/A",
             createdAt: ticket.createdAt || new Date().toISOString(),
           }
           
@@ -441,15 +410,15 @@ export function NewRepairTicketForm() {
       </CardHeader>
       <CardContent className="p-6 text-white">
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Customer Information */}
+          {/* Customer Information - Larger, more clickable */}
           <div className="grid gap-6 md:grid-cols-3 border-b border-gray-800 pb-6">
-            <div className="space-y-2">
-              <Label htmlFor="clientId" className="text-gray-200">Client ID (Auto-generated)</Label>
+            <div className="space-y-3">
+              <Label htmlFor="clientId" className="text-gray-200 text-base font-semibold">Client ID (Auto-generated)</Label>
               <Input
                 id="clientId"
                 value={clientId}
                 disabled
-                className="bg-blue-900/20 border-blue-700/50 text-blue-300 font-mono font-semibold cursor-not-allowed"
+                className="bg-blue-900/20 border-blue-700/50 text-blue-300 font-mono font-semibold cursor-not-allowed h-12 text-lg"
               />
               <p className="text-xs text-gray-500">
                 Client ID is automatically generated
@@ -601,8 +570,8 @@ export function NewRepairTicketForm() {
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label className="text-gray-200">{t("form.imei")} *</Label>
+                  <div className="space-y-3">
+                    <Label className="text-gray-200 text-base font-semibold">{t("form.imei")} *</Label>
                     <Input
                       placeholder={t("placeholder.imei")}
                       value={device.imeiNo}
@@ -610,19 +579,19 @@ export function NewRepairTicketForm() {
                       required
                       maxLength={15}
                       inputMode="numeric"
-                      className={`bg-gray-800/50 border-gray-700 text-white placeholder:text-gray-500 focus:border-blue-500 ${device.imeiError ? "border-red-500 focus-visible:ring-red-500" : ""}`}
+                      className={`bg-gray-800/50 border-gray-700 text-white placeholder:text-gray-500 focus:border-blue-500 h-12 text-lg ${device.imeiError ? "border-red-500 focus-visible:ring-red-500" : ""}`}
                     />
                     {device.imeiError && <p className="text-xs text-red-400">{device.imeiError}</p>}
                   </div>
 
-                  <div className="space-y-2">
-                    <Label className="text-gray-200">Laptop Serial Number *</Label>
+                  <div className="space-y-3">
+                    <Label className="text-gray-200 text-base font-semibold">Laptop Serial Number *</Label>
                     <Input
                       placeholder="Enter laptop serial number"
                       value={device.serialNo || ""}
                       onChange={(e) => updateDevice(deviceIndex, "serialNo", e.target.value)}
                       required
-                      className="bg-gray-800/50 border-gray-700 text-white placeholder:text-gray-500 focus:border-blue-500"
+                      className="bg-gray-800/50 border-gray-700 text-white placeholder:text-gray-500 focus:border-blue-500 h-12 text-lg"
                     />
                     <p className="text-xs text-gray-500">Enter the laptop serial number</p>
                   </div>
@@ -640,54 +609,104 @@ export function NewRepairTicketForm() {
                     </label>
                   </div>
 
-                  {/* Equipment Check */}
+                  {/* Equipment Check - Large clickable buttons for easy use */}
                   <div className="space-y-2 md:col-span-2">
-                    <Label className="text-gray-200">Equipment Check</Label>
-                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 bg-gray-800/50 rounded-md border border-gray-700 p-3">
-                      <label className="flex items-center gap-2 text-sm text-gray-200 hover:text-white cursor-pointer">
+                    <Label className="text-gray-200 text-lg font-semibold mb-3 block">Equipment Check</Label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {/* 1. SIM Card */}
+                      <label className="flex items-center gap-3 p-4 bg-gray-800/50 rounded-lg border-2 border-gray-700 hover:border-blue-500 hover:bg-gray-800 cursor-pointer transition-all">
                         <input
                           type="checkbox"
-                          className="h-4 w-4 accent-blue-600"
-                          checked={device.battery}
-                          onChange={(e) => updateDevice(deviceIndex, "battery", e.target.checked)}
-                        />
-                        <span>Battery</span>
-                      </label>
-                      <label className="flex items-center gap-2 text-sm text-gray-200 hover:text-white cursor-pointer">
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4 accent-blue-600"
-                          checked={device.charger}
-                          onChange={(e) => updateDevice(deviceIndex, "charger", e.target.checked)}
-                        />
-                        <span>Charger</span>
-                      </label>
-                      <label className="flex items-center gap-2 text-sm text-gray-200 hover:text-white cursor-pointer">
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4 accent-blue-600"
+                          className="h-6 w-6 accent-blue-600 cursor-pointer"
                           checked={device.simCard}
                           onChange={(e) => updateDevice(deviceIndex, "simCard", e.target.checked)}
                         />
-                        <span>SIM Card</span>
+                        <div className="flex items-center gap-2">
+                          <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                          </svg>
+                          <span className="text-base font-medium text-white">SIM Card</span>
+                        </div>
                       </label>
-                      <label className="flex items-center gap-2 text-sm text-gray-200 hover:text-white cursor-pointer">
+                      
+                      {/* 2. Memory Card */}
+                      <label className="flex items-center gap-3 p-4 bg-gray-800/50 rounded-lg border-2 border-gray-700 hover:border-blue-500 hover:bg-gray-800 cursor-pointer transition-all">
                         <input
                           type="checkbox"
-                          className="h-4 w-4 accent-blue-600"
+                          className="h-6 w-6 accent-blue-600 cursor-pointer"
                           checked={device.memoryCard}
                           onChange={(e) => updateDevice(deviceIndex, "memoryCard", e.target.checked)}
                         />
-                        <span>Memory Card</span>
+                        <div className="flex items-center gap-2">
+                          <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
+                          </svg>
+                          <span className="text-base font-medium text-white">Memory Card</span>
+                        </div>
                       </label>
-                      <label className="flex items-center gap-2 text-sm text-gray-200 hover:text-white cursor-pointer">
+                      
+                      {/* 3. Charger */}
+                      <label className="flex items-center gap-3 p-4 bg-gray-800/50 rounded-lg border-2 border-gray-700 hover:border-blue-500 hover:bg-gray-800 cursor-pointer transition-all">
                         <input
                           type="checkbox"
-                          className="h-4 w-4 accent-blue-600"
+                          className="h-6 w-6 accent-blue-600 cursor-pointer"
+                          checked={device.charger}
+                          onChange={(e) => updateDevice(deviceIndex, "charger", e.target.checked)}
+                        />
+                        <div className="flex items-center gap-2">
+                          <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                          </svg>
+                          <span className="text-base font-medium text-white">Charger</span>
+                        </div>
+                      </label>
+                      
+                      {/* 4. Battery */}
+                      <label className="flex items-center gap-3 p-4 bg-gray-800/50 rounded-lg border-2 border-gray-700 hover:border-blue-500 hover:bg-gray-800 cursor-pointer transition-all">
+                        <input
+                          type="checkbox"
+                          className="h-6 w-6 accent-blue-600 cursor-pointer"
+                          checked={device.battery}
+                          onChange={(e) => updateDevice(deviceIndex, "battery", e.target.checked)}
+                        />
+                        <div className="flex items-center gap-2">
+                          <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                          </svg>
+                          <span className="text-base font-medium text-white">Battery</span>
+                        </div>
+                      </label>
+                      
+                      {/* 5. Water Damaged */}
+                      <label className="flex items-center gap-3 p-4 bg-gray-800/50 rounded-lg border-2 border-gray-700 hover:border-red-500 hover:bg-gray-800 cursor-pointer transition-all">
+                        <input
+                          type="checkbox"
+                          className="h-6 w-6 accent-red-600 cursor-pointer"
+                          checked={device.waterDamaged}
+                          onChange={(e) => updateDevice(deviceIndex, "waterDamaged", e.target.checked)}
+                        />
+                        <div className="flex items-center gap-2">
+                          <svg className="w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+                          </svg>
+                          <span className="text-base font-medium text-white">Water Damaged</span>
+                        </div>
+                      </label>
+                      
+                      {/* Loan Equipment */}
+                      <label className="flex items-center gap-3 p-4 bg-gray-800/50 rounded-lg border-2 border-gray-700 hover:border-blue-500 hover:bg-gray-800 cursor-pointer transition-all">
+                        <input
+                          type="checkbox"
+                          className="h-6 w-6 accent-blue-600 cursor-pointer"
                           checked={device.loanEquipment}
                           onChange={(e) => updateDevice(deviceIndex, "loanEquipment", e.target.checked)}
                         />
-                        <span>Loan Equipment</span>
+                        <div className="flex items-center gap-2">
+                          <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                          </svg>
+                          <span className="text-base font-medium text-white">Loan Equipment</span>
+                        </div>
                       </label>
                     </div>
                   </div>
@@ -701,17 +720,6 @@ export function NewRepairTicketForm() {
                       rows={2}
                       className="bg-gray-800/50 border-gray-700 text-white placeholder:text-gray-500 focus:border-blue-500"
                     />
-                  </div>
-
-                  {/* SPU and Repair Number Preview */}
-                  <div className="space-y-2 md:col-span-2">
-                    <Label className="text-gray-200">SPU (Auto-generated)</Label>
-                    <Input
-                      value={getSPUPreview(device)}
-                      disabled
-                      className="bg-blue-900/20 border-blue-700/50 text-blue-300 font-mono font-semibold cursor-not-allowed"
-                    />
-                    <p className="text-xs text-gray-500">Based on first selected service: {device.selectedServices[0] || "Select a service"}</p>
                   </div>
 
                   <div className="space-y-2 md:col-span-2">
@@ -1045,20 +1053,24 @@ export function printReceiptForTickets(tickets: any[]) {
         <div style="margin: 4px 0;">
           <div style="font-weight: bold; margin-bottom: 2px; font-size: 7pt;">Equipment Check:</div>
           <div style="display: table; width: 100%; margin: 1px 0;">
-            <div style="display: table-cell; width: 30%; font-weight: bold; font-size: 7pt;">Battery:</div>
-            <div style="display: table-cell; width: 70%; font-size: 7pt;">${ticket.battery ? "Yes" : "No"}</div>
-          </div>
-          <div style="display: table; width: 100%; margin: 1px 0;">
-            <div style="display: table-cell; width: 30%; font-weight: bold; font-size: 7pt;">Charger:</div>
-            <div style="display: table-cell; width: 70%; font-size: 7pt;">${ticket.charger ? "Yes" : "No"}</div>
-          </div>
-          <div style="display: table; width: 100%; margin: 1px 0;">
             <div style="display: table-cell; width: 30%; font-weight: bold; font-size: 7pt;">SIM Card:</div>
             <div style="display: table-cell; width: 70%; font-size: 7pt;">${ticket.simCard ? "Yes" : "No"}</div>
           </div>
           <div style="display: table; width: 100%; margin: 1px 0;">
             <div style="display: table-cell; width: 30%; font-weight: bold; font-size: 7pt;">Memory Card:</div>
             <div style="display: table-cell; width: 70%; font-size: 7pt;">${ticket.memoryCard ? "Yes" : "No"}</div>
+          </div>
+          <div style="display: table; width: 100%; margin: 1px 0;">
+            <div style="display: table-cell; width: 30%; font-weight: bold; font-size: 7pt;">Charger:</div>
+            <div style="display: table-cell; width: 70%; font-size: 7pt;">${ticket.charger ? "Yes" : "No"}</div>
+          </div>
+          <div style="display: table; width: 100%; margin: 1px 0;">
+            <div style="display: table-cell; width: 30%; font-weight: bold; font-size: 7pt;">Battery:</div>
+            <div style="display: table-cell; width: 70%; font-size: 7pt;">${ticket.battery ? "Yes" : "No"}</div>
+          </div>
+          <div style="display: table; width: 100%; margin: 1px 0;">
+            <div style="display: table-cell; width: 30%; font-weight: bold; font-size: 7pt;">Water Damaged:</div>
+            <div style="display: table-cell; width: 70%; font-size: 7pt;">${ticket.waterDamaged ? "Yes" : "No"}</div>
           </div>
           <div style="display: table; width: 100%; margin: 1px 0;">
             <div style="display: table-cell; width: 30%; font-weight: bold; font-size: 7pt;">Loan Equipment:</div>
@@ -1072,9 +1084,6 @@ export function printReceiptForTickets(tickets: any[]) {
             <div style="display: table-cell; width: 60%; font-size: 7pt;">${ticket.equipmentObs || "-"}</div>
           </div>
           <div style="display: table; width: 100%; margin: 1px 0;">
-            <div style="display: table-cell; width: 40%; font-weight: bold; font-size: 7pt;">SPU:</div>
-            <div style="display: table-cell; width: 60%; font-size: 7pt;">${ticket.spu || "N/A"}</div>
-          </div>
           <div style="display: table; width: 100%; margin: 1px 0;">
             <div style="display: table-cell; width: 40%; font-weight: bold; font-size: 7pt;">Repair Obs.:</div>
             <div style="display: table-cell; width: 60%; font-size: 7pt;">${ticket.repairObs || "-"}</div>

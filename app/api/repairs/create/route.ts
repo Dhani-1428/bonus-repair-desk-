@@ -107,10 +107,11 @@ export async function POST(request: NextRequest) {
       model,
       softwareVersion,
       warranty,
-      battery,
-      charger,
       simCard,
       memoryCard,
+      charger,
+      battery,
+      waterDamaged,
       loanEquipment,
       equipmentObs,
       repairObs,
@@ -239,8 +240,8 @@ export async function POST(request: NextRequest) {
 
     await execute(
       `INSERT INTO ${tableName} (id, userId, repairNumber, spu, clientId, customerName, contact, imeiNo,
-        brand, model, serialNo, softwareVersion, warranty, battery, charger,
-        simCard, memoryCard, loanEquipment, equipmentObs, repairObs,
+        brand, model, serialNo, softwareVersion, warranty, simCard, memoryCard,
+        charger, battery, waterDamaged, loanEquipment, equipmentObs, repairObs,
         selectedServices, \`condition\`, problem, price, status)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
@@ -257,10 +258,11 @@ export async function POST(request: NextRequest) {
         finalSerialNo || null,
         softwareVersion || null,
         warranty || "Without Warranty",
-        battery || false,
-        charger || false,
         simCard || false,
         memoryCard || false,
+        charger || false,
+        battery || false,
+        waterDamaged || false,
         loanEquipment || false,
         equipmentObs || null,
         repairObs || null,
