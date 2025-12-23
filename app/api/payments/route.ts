@@ -169,11 +169,21 @@ export async function POST(request: NextRequest) {
       // Don't fail payment creation if email fails, but log the error clearly
     }
 
+    console.log("[API] ✅ Payment request created successfully:", paymentId)
     return NextResponse.json({ payment: formatted }, { status: 201 })
-  } catch (error) {
-    console.error("[API] Error creating payment request:", error)
+  } catch (error: any) {
+    console.error("[API] ❌ Error creating payment request:", error?.message || error)
+    console.error("[API] Error details:", {
+      code: error?.code,
+      sqlState: error?.sqlState,
+      sqlMessage: error?.sqlMessage,
+      stack: error?.stack?.substring(0, 500),
+    })
     return NextResponse.json(
-      { error: "Failed to create payment request" },
+      { 
+        error: "Failed to create payment request",
+        details: process.env.NODE_ENV === "development" ? error?.message : undefined,
+      },
       { status: 500 }
     )
   }

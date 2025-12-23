@@ -154,6 +154,7 @@ export default function BillingPage() {
 
       // Save payment request for admin approval via API
       try {
+        console.log("[Billing] Creating payment request via API...")
         const paymentResponse = await fetch("/api/payments", {
           method: "POST",
           headers: {
@@ -170,53 +171,22 @@ export default function BillingPage() {
           }),
         })
 
-        // Receipt email will be sent automatically by the API
-
         if (!paymentResponse.ok) {
-          console.error("Failed to create payment request via API")
-          // Fallback to localStorage
-          const paymentRequests = JSON.parse(localStorage.getItem("payment_requests") || "[]")
-          paymentRequests.push({
-            id: paymentId,
-            userId: user.id,
-            userName: user.name,
-            userEmail: user.email,
-            plan: selectedPlan,
-            planName: planDetails.name,
-            price: planDetails.price,
-            months: planDetails.months,
-            startDate: startDate.toISOString(),
-            endDate: endDate.toISOString(),
-            status: "pending",
-            paymentMethod: "MBWay",
-            mbwayNumber: "+351920306889",
-            recipientName: "Sheetal Sheetal",
-            createdAt: new Date().toISOString(),
-          })
-          localStorage.setItem("payment_requests", JSON.stringify(paymentRequests))
+          const errorData = await paymentResponse.json().catch(() => ({}))
+          console.error("[Billing] ❌ Failed to create payment request via API:", paymentResponse.status, errorData)
+          throw new Error(errorData.error || `Failed to create payment request: ${paymentResponse.status}`)
         }
-      } catch (apiError) {
-        console.error("Error creating payment request via API:", apiError)
-        // Fallback to localStorage
-        const paymentRequests = JSON.parse(localStorage.getItem("payment_requests") || "[]")
-        paymentRequests.push({
-          id: paymentId,
-          userId: user.id,
-          userName: user.name,
-          userEmail: user.email,
-          plan: selectedPlan,
-          planName: planDetails.name,
-          price: planDetails.price,
-          months: planDetails.months,
-          startDate: startDate.toISOString(),
-          endDate: endDate.toISOString(),
-          status: "pending",
-          paymentMethod: "MBWay",
-          mbwayNumber: "+351920306889",
-          recipientName: "Sheetal Sheetal",
-          createdAt: new Date().toISOString(),
-        })
-        localStorage.setItem("payment_requests", JSON.stringify(paymentRequests))
+
+        const paymentData = await paymentResponse.json()
+        console.log("[Billing] ✅ Payment request created successfully:", paymentData.payment?.id)
+        
+        // Receipt email and admin notification email are sent automatically by the API
+        console.log("[Billing] ✅ Emails should have been sent automatically")
+      } catch (apiError: any) {
+        console.error("[Billing] ❌ Error creating payment request via API:", apiError?.message || apiError)
+        toast.error(`Failed to submit payment: ${apiError?.message || "Please try again"}`)
+        setLoading(false)
+        return // Don't continue if API call fails
       }
 
       toast.success("Payment submitted! Your admin panel will be activated within 15 minutes after admin approval.")
