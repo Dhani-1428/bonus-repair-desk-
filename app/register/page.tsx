@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label"
 import { useAuth } from "@/hooks/use-auth"
 import { AlertCircle, CheckCircle, Loader2, Sparkles } from "lucide-react"
 import { PLAN_PRICING, type SubscriptionPlan } from "@/lib/constants"
+import { useTranslation } from "@/components/language-provider"
 
 export default function RegisterPage() {
   const { t } = useTranslation()
