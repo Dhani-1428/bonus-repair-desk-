@@ -222,6 +222,38 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Convert ISO date strings to MySQL DATETIME format
+    let mysqlStartDate: string
+    let mysqlEndDate: string
+    try {
+      mysqlStartDate = toMySQLDateTime(startDate) || ""
+      mysqlEndDate = toMySQLDateTime(endDate) || ""
+      
+      if (!mysqlStartDate || !mysqlEndDate) {
+        console.error("[API] ❌ Invalid date format:", { startDate, endDate })
+        return NextResponse.json(
+          { error: "Invalid date format. Dates must be valid ISO strings or Date objects." },
+          { status: 400 }
+        )
+      }
+      
+      console.log("[API] Converted dates to MySQL format:", {
+        originalStartDate: startDate,
+        mysqlStartDate,
+        originalEndDate: endDate,
+        mysqlEndDate,
+      })
+    } catch (dateError: any) {
+      console.error("[API] ❌ Error converting dates to MySQL format:", dateError?.message || dateError)
+      return NextResponse.json(
+        { 
+          error: "Invalid date format",
+          details: dateError?.message || "Dates must be valid ISO strings or Date objects",
+        },
+        { status: 400 }
+      )
+    }
+
     console.log("[API] Creating payment request:", {
       paymentId,
       userId,
@@ -230,8 +262,8 @@ export async function POST(request: NextRequest) {
       planName,
       price: parsedPrice,
       months: parsedMonths,
-      startDate,
-      endDate,
+      startDate: mysqlStartDate,
+      endDate: mysqlEndDate,
     })
 
     try {
@@ -243,8 +275,8 @@ export async function POST(request: NextRequest) {
         planName,
         price: parsedPrice,
         months: parsedMonths,
-        startDate,
-        endDate,
+        startDate: mysqlStartDate,
+        endDate: mysqlEndDate,
       })
       
       await execute(
