@@ -220,8 +220,8 @@ export function NewRepairTicketForm() {
         toast.error(`Device ${i + 1}: At least one service is required`)
         return
       }
-      if (!device.model.trim() || !device.problem.trim() || !device.price.trim()) {
-        toast.error(`Device ${i + 1}: Model, technician notes, and price are required`)
+      if (!device.model.trim() || !device.price.trim()) {
+        toast.error(`Device ${i + 1}: Model and price are required`)
         return
       }
     }
@@ -255,7 +255,7 @@ export function NewRepairTicketForm() {
             repairObs: device.repairObs || null,
             selectedServices: device.selectedServices,
             condition: null,
-            problem: device.problem,
+            problem: device.problem || null,
             price: parseFloat(device.price),
             status: "PENDING",
           }),
@@ -814,13 +814,12 @@ export function NewRepairTicketForm() {
                   </div>
 
                   <div className="space-y-2 md:col-span-2">
-                    <Label className="text-gray-200">{t("form.technicianNotes")} *</Label>
+                    <Label className="text-gray-200">{t("form.technicianNotes")}</Label>
                     <Textarea
                       placeholder={t("placeholder.technicianNotes")}
                       value={device.problem}
                       onChange={(e) => updateDevice(deviceIndex, "problem", e.target.value)}
                       rows={4}
-                      required
                       className="bg-gray-800/50 border-gray-700 text-white placeholder:text-gray-500 focus:border-blue-500"
                     />
                   </div>

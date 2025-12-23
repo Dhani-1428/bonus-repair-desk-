@@ -123,9 +123,10 @@ export async function POST(request: NextRequest) {
     } = body
 
     // Validate required fields (clientId is now required, not auto-generated)
-    if (!userId || !customerName || !contact || !imeiNo || !brand || !model || !problem || price === undefined || !clientId || clientId.trim() === "") {
+    // Note: problem (technician notes), equipmentObs, and repairObs are optional
+    if (!userId || !customerName || !contact || !imeiNo || !brand || !model || price === undefined || !clientId || clientId.trim() === "") {
       return NextResponse.json(
-        { error: "Missing required fields. Client NIF is required." },
+        { error: "Missing required fields. Client NIF, Customer Name, Contact, IMEI, Brand, Model, and Price are required." },
         { status: 400 }
       )
     }
