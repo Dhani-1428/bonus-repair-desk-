@@ -363,22 +363,6 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                     Administration
                   </p>
                 </div>
-                <Link href="/team">
-                  <Button variant="ghost" className="w-full justify-start hover:bg-gradient-to-r hover:from-blue-600/20 hover:to-purple-600/20 hover:text-white text-gray-300 font-medium h-12 transition-all duration-300 group relative overflow-hidden">
-                    <div className="absolute inset-0 bg-gradient-to-r from-blue-600/0 to-purple-600/0 group-hover:from-blue-600/10 group-hover:to-purple-600/10 transition-all duration-300"></div>
-                    <div className="relative w-9 h-9 bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg flex items-center justify-center mr-3 group-hover:from-blue-600 group-hover:to-purple-600 transition-all duration-300 shadow-lg group-hover:shadow-blue-500/50 group-hover:scale-110">
-                      <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2.5}
-                          d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
-                        />
-                      </svg>
-                    </div>
-                    <span className="relative">{t("header.team")}</span>
-                  </Button>
-                </Link>
                 <Link href="/trash">
                   <Button variant="ghost" className="w-full justify-start hover:bg-gradient-to-r hover:from-blue-600/20 hover:to-purple-600/20 hover:text-white text-gray-300 font-medium h-12 transition-all duration-300 group relative overflow-hidden">
                     <div className="absolute inset-0 bg-gradient-to-r from-blue-600/0 to-purple-600/0 group-hover:from-blue-600/10 group-hover:to-purple-600/10 transition-all duration-300"></div>
