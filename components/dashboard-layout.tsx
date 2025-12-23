@@ -16,6 +16,37 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { language, setLanguage, t } = useTranslation()
   const [showPaymentBanner, setShowPaymentBanner] = useState(true)
 
+  // Check if payment notification has been dismissed
+  useEffect(() => {
+    if (!user?.id || !subscription) return
+    
+    // Create unique key for this payment notification
+    const notificationKey = `payment_notification_dismissed_${user.id}_${subscription.id}_${subscription.paymentStatus}`
+    
+    // Check if this specific notification was dismissed
+    if (typeof window !== "undefined") {
+      const dismissed = localStorage.getItem(notificationKey)
+      if (dismissed) {
+        setShowPaymentBanner(false)
+      } else {
+        setShowPaymentBanner(true)
+      }
+    }
+  }, [user?.id, subscription?.id, subscription?.paymentStatus])
+
+  // Function to dismiss payment notification permanently
+  const dismissPaymentNotification = () => {
+    if (!user?.id || !subscription) return
+    
+    const notificationKey = `payment_notification_dismissed_${user.id}_${subscription.id}_${subscription.paymentStatus}`
+    
+    // Mark as dismissed in localStorage
+    if (typeof window !== "undefined") {
+      localStorage.setItem(notificationKey, new Date().toISOString())
+      setShowPaymentBanner(false)
+    }
+  }
+
   useEffect(() => {
     if (!loading && !user) {
       router.push("/login")
@@ -402,7 +433,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => setShowPaymentBanner(false)}
+                    onClick={dismissPaymentNotification}
                     className="text-red-300 hover:text-white"
                   >
                     <X className="w-5 h-5" />
@@ -423,7 +454,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => setShowPaymentBanner(false)}
+                      onClick={dismissPaymentNotification}
                       className="text-green-300 hover:text-white"
                     >
                       <X className="w-5 h-5" />
@@ -444,7 +475,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => setShowPaymentBanner(false)}
+                    onClick={dismissPaymentNotification}
                     className="text-yellow-300 hover:text-white"
                   >
                     <X className="w-5 h-5" />
