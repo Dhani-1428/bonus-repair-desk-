@@ -207,20 +207,46 @@ export async function POST(request: NextRequest) {
     })
 
     try {
+      console.log("[API] Inserting payment request into database with values:", {
+        paymentId,
+        userId,
+        tenantId: user.tenantId,
+        plan,
+        planName,
+        price: parsedPrice,
+        months: parsedMonths,
+        startDate,
+        endDate,
+      })
+      
       await execute(
         `INSERT INTO payment_requests 
          (id, userId, tenantId, plan, planName, price, months, startDate, endDate, status)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')`,
         [paymentId, userId, user.tenantId, plan, planName, parsedPrice, parsedMonths, startDate, endDate]
       )
-      console.log("[API] ✅ Payment request inserted into database")
+      console.log("[API] ✅ Payment request inserted into database successfully")
     } catch (dbError: any) {
       console.error("[API] ❌ Database error creating payment request:", dbError?.message || dbError)
       console.error("[API] Error details:", {
         code: dbError?.code,
+        errno: dbError?.errno,
         sqlState: dbError?.sqlState,
         sqlMessage: dbError?.sqlMessage,
+        sql: dbError?.sql,
       })
+      
+      // Provide more specific error message
+      if (dbError?.code === "ER_NO_SUCH_TABLE") {
+        throw new Error("Database table 'payment_requests' does not exist. The table should have been created automatically.")
+      } else if (dbError?.code === "ER_DUP_ENTRY") {
+        throw new Error("Payment request with this ID already exists. Please try again.")
+      } else if (dbError?.code === "ER_BAD_FIELD_ERROR") {
+        throw new Error(`Database table structure error: ${dbError?.sqlMessage || "Invalid column name"}`)
+      } else if (dbError?.code === "ER_TRUNCATED_WRONG_VALUE_FOR_FIELD") {
+        throw new Error(`Invalid data format: ${dbError?.sqlMessage || "Check date/price format"}`)
+      }
+      
       throw dbError // Re-throw to be caught by outer try-catch
     }
 
