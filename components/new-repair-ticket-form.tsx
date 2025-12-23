@@ -280,7 +280,19 @@ export function NewRepairTicketForm() {
         }
 
         if (!response.ok) {
-          const errorMessage = data?.error || data?.message || data?.details || `HTTP ${response.status}: ${response.statusText}`
+          // Extract error message - prioritize specific error messages
+          let errorMessage = data?.error || data?.message || `HTTP ${response.status}: ${response.statusText}`
+          
+          // If there are details, append them for better debugging
+          if (data?.details && typeof data.details === 'object') {
+            const detailsStr = Object.entries(data.details)
+              .map(([key, value]) => `${key}: ${value}`)
+              .join(', ')
+            if (detailsStr) {
+              console.error("[NewRepairTicketForm] Error details:", detailsStr)
+            }
+          }
+          
           console.error("[NewRepairTicketForm] API Error:", {
             status: response.status,
             statusText: response.statusText,

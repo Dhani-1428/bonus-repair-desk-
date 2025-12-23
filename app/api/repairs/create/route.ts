@@ -239,7 +239,7 @@ export async function POST(request: NextRequest) {
         brand, model, serialNo, softwareVersion, warranty, simCard, memoryCard,
         charger, battery, waterDamaged, loanEquipment, equipmentObs, repairObs,
         selectedServices, \`condition\`, problem, price, status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         ticketId,
         userId,
@@ -312,8 +312,15 @@ export async function POST(request: NextRequest) {
 
     // Handle MySQL unique constraint violations
     if (error.code === "ER_DUP_ENTRY") {
+      const duplicateField = error.sqlMessage?.includes("repairNumber") 
+        ? "Repair number" 
+        : error.sqlMessage?.includes("spu") 
+        ? "SPU" 
+        : error.sqlMessage?.includes("imeiNo")
+        ? "IMEI"
+        : "A field"
       return NextResponse.json(
-        { error: "Repair number, SPU, or IMEI already exists. Please use a different value." },
+        { error: `${duplicateField} already exists. Please use a different value.` },
         { status: 400 }
       )
     }
@@ -334,18 +341,24 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Provide more detailed error message in development
-    const errorMessage = process.env.NODE_ENV === "development" 
-      ? (error?.message || error?.sqlMessage || "Failed to create repair ticket. Please try again.")
-      : "Failed to create repair ticket. Please try again."
+    // Handle SQL syntax errors (column count mismatch, etc.)
+    if (error.code === "ER_WRONG_VALUE_COUNT_ON_ROW" || error.code === "21S01") {
+      return NextResponse.json(
+        { error: "Data validation error. Please check all fields and try again." },
+        { status: 400 }
+      )
+    }
+
+    // Provide more detailed error message - always show specific errors
+    const errorMessage = error?.sqlMessage || error?.message || "Failed to create repair ticket. Please try again."
 
     return NextResponse.json(
       { 
         error: errorMessage,
-        details: process.env.NODE_ENV === "development" ? {
+        details: {
           code: error?.code,
-          sqlMessage: error?.sqlMessage,
-        } : undefined
+          sqlState: error?.sqlState,
+        }
       },
       { status: 500 }
     )
