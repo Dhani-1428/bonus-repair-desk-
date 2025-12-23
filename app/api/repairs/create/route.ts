@@ -305,6 +305,14 @@ export async function POST(request: NextRequest) {
     )
   } catch (error: any) {
     console.error("[API] Error creating repair ticket:", error)
+    console.error("[API] Error details:", {
+      message: error?.message,
+      code: error?.code,
+      errno: error?.errno,
+      sqlState: error?.sqlState,
+      sqlMessage: error?.sqlMessage,
+      stack: error?.stack?.substring(0, 500),
+    })
 
     // Handle MySQL unique constraint violations
     if (error.code === "ER_DUP_ENTRY") {
@@ -315,15 +323,34 @@ export async function POST(request: NextRequest) {
     }
 
     // Handle connection errors
-    if (error.code === "ECONNREFUSED" || error.message?.includes("connect")) {
+    if (error.code === "ECONNREFUSED" || error.message?.includes("connect") || error.code === "ECONNRESET") {
       return NextResponse.json(
         { error: "Database connection error. Please try again later." },
         { status: 503 }
       )
     }
 
+    // Handle table not found errors
+    if (error.code === "ER_NO_SUCH_TABLE") {
+      return NextResponse.json(
+        { error: "Database table not found. Please contact support." },
+        { status: 500 }
+      )
+    }
+
+    // Provide more detailed error message in development
+    const errorMessage = process.env.NODE_ENV === "development" 
+      ? (error?.message || error?.sqlMessage || "Failed to create repair ticket. Please try again.")
+      : "Failed to create repair ticket. Please try again."
+
     return NextResponse.json(
-      { error: "Failed to create repair ticket. Please try again." },
+      { 
+        error: errorMessage,
+        details: process.env.NODE_ENV === "development" ? {
+          code: error?.code,
+          sqlMessage: error?.sqlMessage,
+        } : undefined
+      },
       { status: 500 }
     )
   }
