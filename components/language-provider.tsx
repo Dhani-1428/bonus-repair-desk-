@@ -135,6 +135,14 @@ const translations: Record<Language, Record<string, string>> = {
     "error.ticketStatusUpdateFailed": "Failed to update ticket status",
     "success.deviceMovedToTrash": "Device moved to trash",
 
+    // Payment status banners
+    "payment.declined": "Your payment is declined",
+    "payment.declinedMessage": "Please contact support or try a different payment method.",
+    "payment.successful": "Your payment is successful",
+    "payment.successfulMessage": "Your subscription is now active. Thank you!",
+    "payment.inProcess": "Your payment is in process",
+    "payment.inProcessMessage": "Your payment is being reviewed. You'll be notified once it's approved.",
+
     // SearchRepairTickets
     "search.title": "Search Devices",
     "search.results": "Results",
@@ -504,6 +512,14 @@ const translations: Record<Language, Record<string, string>> = {
     "error.deviceDeleteFailed": "Falha ao eliminar dispositivo",
     "error.ticketStatusUpdateFailed": "Falha ao atualizar estado do bilhete",
     "success.deviceMovedToTrash": "Dispositivo movido para o lixo",
+
+    // Payment status banners
+    "payment.declined": "O seu pagamento foi recusado",
+    "payment.declinedMessage": "Por favor, contacte o suporte ou tente um método de pagamento diferente.",
+    "payment.successful": "O seu pagamento foi bem-sucedido",
+    "payment.successfulMessage": "A sua subscrição está agora ativa. Obrigado!",
+    "payment.inProcess": "O seu pagamento está em processamento",
+    "payment.inProcessMessage": "O seu pagamento está a ser revisto. Será notificado assim que for aprovado.",
 
     // SearchRepairTickets
     "search.title": "Pesquisar dispositivos",

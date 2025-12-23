@@ -426,8 +426,8 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                       <X className="w-6 h-6 text-red-400" />
                     </div>
                     <div>
-                      <p className="text-white font-semibold text-lg">Your payment is declined</p>
-                      <p className="text-red-300 text-sm">Please contact support or try a different payment method.</p>
+                      <p className="text-white font-semibold text-lg">{t("payment.declined")}</p>
+                      <p className="text-red-300 text-sm">{t("payment.declinedMessage")}</p>
                     </div>
                   </div>
                   <Button
@@ -447,8 +447,8 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                         <CheckCircle className="w-6 h-6 text-green-400" />
                       </div>
                       <div>
-                        <p className="text-white font-semibold text-lg">Your payment is successful</p>
-                        <p className="text-green-300 text-sm">Your subscription is now active. Thank you!</p>
+                        <p className="text-white font-semibold text-lg">{t("payment.successful")}</p>
+                        <p className="text-green-300 text-sm">{t("payment.successfulMessage")}</p>
                       </div>
                     </div>
                     <Button
@@ -468,8 +468,8 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                       <Clock className="w-6 h-6 text-yellow-400" />
                     </div>
                     <div>
-                      <p className="text-white font-semibold text-lg">Your payment is in process</p>
-                      <p className="text-yellow-300 text-sm">Your payment is being reviewed. You'll be notified once it's approved.</p>
+                      <p className="text-white font-semibold text-lg">{t("payment.inProcess")}</p>
+                      <p className="text-yellow-300 text-sm">{t("payment.inProcessMessage")}</p>
                     </div>
                   </div>
                   <Button
