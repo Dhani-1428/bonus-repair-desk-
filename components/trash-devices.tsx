@@ -15,70 +15,143 @@ export function TrashDevices() {
   const [activeTab, setActiveTab] = useState<"devices" | "members">("devices")
 
   useEffect(() => {
-    const userData = localStorage.getItem("user")
+    const userData = typeof window !== "undefined" ? localStorage.getItem("user") : null
     if (userData) {
-      setCurrentUser(JSON.parse(userData))
+      try {
+        setCurrentUser(JSON.parse(userData))
+      } catch (error) {
+        console.error("Error parsing user data:", error)
+      }
     }
 
-    const loadDeletedItems = () => {
-      const storedTickets = getUserData<any[]>("deletedTickets", [])
-      const sortedTickets = storedTickets.sort((a: any, b: any) => 
-        new Date(b.deletedAt || 0).getTime() - new Date(a.deletedAt || 0).getTime()
-      )
-      setDeletedTickets(sortedTickets)
+    const loadDeletedItems = async () => {
+      try {
+        // Try to get from localStorage first (fallback for deleted items)
+        if (typeof window !== "undefined") {
+          const storedTicketsStr = localStorage.getItem("deletedTickets")
+          const storedMembersStr = localStorage.getItem("deletedMembers")
+          
+          if (storedTicketsStr) {
+            try {
+              const storedTickets = JSON.parse(storedTicketsStr)
+              const sortedTickets = storedTickets.sort((a: any, b: any) => 
+                new Date(b.deletedAt || 0).getTime() - new Date(a.deletedAt || 0).getTime()
+              )
+              setDeletedTickets(sortedTickets)
+            } catch (error) {
+              console.error("Error parsing deleted tickets:", error)
+              setDeletedTickets([])
+            }
+          } else {
+            setDeletedTickets([])
+          }
 
-      const storedMembers = getUserData<any[]>("deletedMembers", [])
-      const sortedMembers = storedMembers.sort((a: any, b: any) => 
-        new Date(b.deletedAt || 0).getTime() - new Date(a.deletedAt || 0).getTime()
-      )
-      setDeletedMembers(sortedMembers)
+          if (storedMembersStr) {
+            try {
+              const storedMembers = JSON.parse(storedMembersStr)
+              const sortedMembers = storedMembers.sort((a: any, b: any) => 
+                new Date(b.deletedAt || 0).getTime() - new Date(a.deletedAt || 0).getTime()
+              )
+              setDeletedMembers(sortedMembers)
+            } catch (error) {
+              console.error("Error parsing deleted members:", error)
+              setDeletedMembers([])
+            }
+          } else {
+            setDeletedMembers([])
+          }
+        }
+      } catch (error) {
+        console.error("Error loading deleted items:", error)
+        setDeletedTickets([])
+        setDeletedMembers([])
+      }
     }
 
     loadDeletedItems()
-    const interval = setInterval(loadDeletedItems, 1000)
+    const interval = setInterval(loadDeletedItems, 2000)
     return () => clearInterval(interval)
   }, [])
 
-  const handleRestoreDevice = (ticketId: string) => {
+  const handleRestoreDevice = async (ticketId: string) => {
     const ticketToRestore = deletedTickets.find((t: any) => String(t.id) === String(ticketId))
     if (!ticketToRestore) return
 
-    const activeTickets = getUserData<any[]>("repairTickets", [])
-    const { deletedAt, ...ticketWithoutDeletedDate } = ticketToRestore
-    activeTickets.unshift(ticketWithoutDeletedDate)
-    setUserData("repairTickets", activeTickets)
+    try {
+      // Restore via API
+      const { deletedAt, ...ticketWithoutDeletedDate } = ticketToRestore
+      const response = await fetch("/api/repairs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(ticketWithoutDeletedDate),
+      })
 
-    const updatedDeleted = deletedTickets.filter((t: any) => String(t.id) !== String(ticketId))
-    setUserData("deletedTickets", updatedDeleted)
-    setDeletedTickets(updatedDeleted)
-    toast.success("Device restored successfully!")
+      if (!response.ok) {
+        throw new Error("Failed to restore device")
+      }
+
+      // Update localStorage for deleted tickets
+      if (typeof window !== "undefined") {
+        const updatedDeleted = deletedTickets.filter((t: any) => String(t.id) !== String(ticketId))
+        localStorage.setItem("deletedTickets", JSON.stringify(updatedDeleted))
+        setDeletedTickets(updatedDeleted)
+      }
+
+      toast.success("Device restored successfully!")
+    } catch (error) {
+      console.error("Error restoring device:", error)
+      toast.error("Failed to restore device. Please try again.")
+    }
   }
 
-  const handleRestoreMember = (memberId: string) => {
+  const handleRestoreMember = async (memberId: string) => {
     const memberToRestore = deletedMembers.find((m: any) => String(m.id) === String(memberId))
     if (!memberToRestore) return
 
-    const activeMembers = getUserData<any[]>("teamMembers", [])
-    const { deletedAt, ...memberWithoutDeletedDate } = memberToRestore
-    activeMembers.push(memberWithoutDeletedDate)
-    setUserData("teamMembers", activeMembers)
+    try {
+      // Restore via API
+      const { deletedAt, ...memberWithoutDeletedDate } = memberToRestore
+      const response = await fetch("/api/team-members", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(memberWithoutDeletedDate),
+      })
 
-    const updatedDeleted = deletedMembers.filter((m: any) => String(m.id) !== String(memberId))
-    setUserData("deletedMembers", updatedDeleted)
-    setDeletedMembers(updatedDeleted)
-    toast.success("Member restored successfully!")
+      if (!response.ok) {
+        throw new Error("Failed to restore member")
+      }
+
+      // Update localStorage for deleted members
+      if (typeof window !== "undefined") {
+        const updatedDeleted = deletedMembers.filter((m: any) => String(m.id) !== String(memberId))
+        localStorage.setItem("deletedMembers", JSON.stringify(updatedDeleted))
+        setDeletedMembers(updatedDeleted)
+      }
+
+      toast.success("Member restored successfully!")
+    } catch (error) {
+      console.error("Error restoring member:", error)
+      toast.error("Failed to restore member. Please try again.")
+    }
   }
 
   const handlePermanentDelete = (ticketId: string, customerName: string) => {
+    if (typeof window === "undefined") return
+    
     const confirmed = window.confirm(
       `Are you sure you want to permanently delete the device entry for ${customerName}? This action cannot be undone.`
     )
     if (!confirmed) return
 
-    const updatedDeleted = deletedTickets.filter((t: any) => String(t.id) !== String(ticketId))
-    setUserData("deletedTickets", updatedDeleted)
-    setDeletedTickets(updatedDeleted)
-    toast.success("Device permanently deleted")
+    try {
+      const updatedDeleted = deletedTickets.filter((t: any) => String(t.id) !== String(ticketId))
+      localStorage.setItem("deletedTickets", JSON.stringify(updatedDeleted))
+      setDeletedTickets(updatedDeleted)
+      toast.success("Device permanently deleted")
+    } catch (error) {
+      console.error("Error deleting device:", error)
+      toast.error("Failed to delete device. Please try again.")
+    }
   }
 
   const getStatusColor = (status: string) => {

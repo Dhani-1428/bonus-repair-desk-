@@ -45,6 +45,10 @@ const translations: Record<Language, Record<string, string>> = {
     "page.tickets.subtitle": "Search and manage all device information",
     "page.tickets.print": "Print",
 
+    // Trash page
+    "page.trash.title": "Trash",
+    "page.trash.subtitle": "Deleted devices - Restore or permanently delete",
+
     // NewRepairTicketForm labels
     "form.customerName": "Customer Name",
     "form.contactNumber": "Contact Number",
@@ -337,6 +341,10 @@ const translations: Record<Language, Record<string, string>> = {
     "page.tickets.title": "Informação dos dispositivos",
     "page.tickets.subtitle": "Pesquisar e gerir toda a informação dos dispositivos",
     "page.tickets.print": "Imprimir",
+
+    // Trash page
+    "page.trash.title": "Lixo",
+    "page.trash.subtitle": "Dispositivos eliminados - Restaurar ou eliminar permanentemente",
 
     // NewRepairTicketForm labels
     "form.customerName": "Nome do cliente",
