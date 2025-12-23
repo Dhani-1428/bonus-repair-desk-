@@ -9,6 +9,8 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const status = searchParams.get("status")
 
+    console.log("[API] Fetching payment requests, status filter:", status || "all")
+
     let sql = `
       SELECT 
         p.*,
@@ -31,6 +33,7 @@ export async function GET(request: NextRequest) {
     sql += ` ORDER BY p.createdAt DESC`
 
     const payments = await query(sql, params)
+    console.log("[API] Found", payments.length, "payment request(s)")
 
     // Transform results
     const formatted = (payments as any[]).map((p) => ({
@@ -45,10 +48,18 @@ export async function GET(request: NextRequest) {
     }))
 
     return NextResponse.json({ payments: formatted })
-  } catch (error) {
-    console.error("[API] Error fetching payment requests:", error)
+  } catch (error: any) {
+    console.error("[API] ❌ Error fetching payment requests:", error?.message || error)
+    console.error("[API] Error details:", {
+      code: error?.code,
+      sqlState: error?.sqlState,
+      sqlMessage: error?.sqlMessage,
+    })
     return NextResponse.json(
-      { error: "Failed to fetch payment requests" },
+      { 
+        error: "Failed to fetch payment requests",
+        details: process.env.NODE_ENV === "development" ? error?.message : undefined,
+      },
       { status: 500 }
     )
   }
