@@ -10,22 +10,32 @@ async function generateRepairNumber(tenantId: string): Promise<string> {
   const tables = getTenantTableNames(tenantId)
   const tableName = escapeId(tables.repairTickets)
 
-  // Find the latest repair number for this year in tenant's table
+  // Find the maximum sequence number for this year in tenant's table
   // Support both old format (REP-YYYY-XXXX) and new format (YYYY-XXXX)
-  const latest = await queryOne(
-    `SELECT repairNumber FROM ${tableName} WHERE repairNumber LIKE ? OR repairNumber LIKE ? ORDER BY repairNumber DESC LIMIT 1`,
+  // Get all repair numbers for this year and find the max sequence
+  const allRepairs = await query(
+    `SELECT repairNumber FROM ${tableName} WHERE repairNumber LIKE ? OR repairNumber LIKE ?`,
     [`${prefix}%`, `REP-${prefix}%`]
   )
 
-  let sequence = 1
-  if (latest && latest.repairNumber) {
-    // Extract sequence number from either format: YYYY-XXXX or REP-YYYY-XXXX
-    const match = latest.repairNumber.match(/(\d{4})$/);
-    if (match) {
-      sequence = parseInt(match[1]) + 1
+  let maxSequence = 0
+  if (allRepairs && Array.isArray(allRepairs)) {
+    for (const repair of allRepairs) {
+      if (repair && repair.repairNumber) {
+        // Extract sequence number from either format: YYYY-XXXX or REP-YYYY-XXXX
+        // Match the last 4 digits after the last dash
+        const match = repair.repairNumber.match(/-(\d{4})$/);
+        if (match) {
+          const seq = parseInt(match[1], 10)
+          if (!isNaN(seq) && seq > maxSequence) {
+            maxSequence = seq
+          }
+        }
+      }
     }
   }
 
+  const sequence = maxSequence + 1
   return `${prefix}${sequence.toString().padStart(4, "0")}`
 }
 
@@ -48,20 +58,29 @@ async function generateSPU(service: string, tenantId: string): Promise<string> {
   const tables = getTenantTableNames(tenantId)
   const tableName = escapeId(tables.repairTickets)
 
-  // Find the latest SPU with this prefix in tenant's table
-  const latest = await queryOne(
-    `SELECT spu FROM ${tableName} WHERE spu LIKE ? ORDER BY spu DESC LIMIT 1`,
+  // Find all SPUs with this prefix and get the maximum sequence number
+  const allSPUs = await query(
+    `SELECT spu FROM ${tableName} WHERE spu LIKE ?`,
     [`${spuPrefix}%`]
   )
 
-  let sequence = 1
-  if (latest) {
-    const match = latest.spu.match(/\d+$/)
-    if (match) {
-      sequence = parseInt(match[0]) + 1
+  let maxSequence = 0
+  if (allSPUs && Array.isArray(allSPUs)) {
+    for (const spuRecord of allSPUs) {
+      if (spuRecord && spuRecord.spu) {
+        // Extract sequence number from the end (last digits after the last dash)
+        const match = spuRecord.spu.match(/-(\d+)$/)
+        if (match) {
+          const seq = parseInt(match[1], 10)
+          if (!isNaN(seq) && seq > maxSequence) {
+            maxSequence = seq
+          }
+        }
+      }
     }
   }
 
+  const sequence = maxSequence + 1
   return `${spuPrefix}${sequence.toString().padStart(3, "0")}`
 }
 
@@ -179,7 +198,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Generate unique identifiers
+    // Generate unique identifiers with retry mechanism
     let repairNumber: string
     let spu: string
     let serialNo: string
@@ -196,40 +215,88 @@ export async function POST(request: NextRequest) {
     const serialNoFromBody = body.serialNo || body.serialNumber || null
     let finalSerialNo: string | null = null
 
-    try {
-      repairNumber = await generateRepairNumber(user.tenantId)
-      const firstService = Array.isArray(selectedServices) && selectedServices.length > 0
-        ? selectedServices[0]
-        : "Other"
-      spu = await generateSPU(firstService, user.tenantId)
-      // Serial number is optional - only use if provided and not empty
-      if (serialNoFromBody && typeof serialNoFromBody === 'string' && serialNoFromBody.trim() !== "") {
-        finalSerialNo = serialNoFromBody.trim()
-      }
-      // If not provided, leave as null (don't auto-generate)
-    } catch (error) {
-      console.error("[API] Error generating identifiers:", error)
-      // Fallback generation
-      const timestamp = Date.now()
-      repairNumber = `${new Date().getFullYear()}-${timestamp.toString().slice(-4)}`
-      spu = `SPU-OTH-${timestamp.toString().slice(-3)}`
-      // Serial number remains null if not provided
-      if (serialNoFromBody && typeof serialNoFromBody === 'string' && serialNoFromBody.trim() !== "") {
-        finalSerialNo = serialNoFromBody.trim()
+    // Retry mechanism to handle race conditions
+    const maxRetries = 5
+    let attempts = 0
+    let repairNumberExists = true
+    let spuExists = true
+
+    while ((repairNumberExists || spuExists) && attempts < maxRetries) {
+      attempts++
+      
+      try {
+        repairNumber = await generateRepairNumber(user.tenantId)
+        const firstService = Array.isArray(selectedServices) && selectedServices.length > 0
+          ? selectedServices[0]
+          : "Other"
+        spu = await generateSPU(firstService, user.tenantId)
+        
+        // Check for duplicates
+        const existingRepair = await queryOne(
+          `SELECT id FROM ${tableName} WHERE repairNumber = ? OR spu = ? LIMIT 1`,
+          [repairNumber, spu]
+        )
+
+        if (existingRepair) {
+          // Check which one exists
+          const existingRepairNumber = await queryOne(
+            `SELECT id FROM ${tableName} WHERE repairNumber = ? LIMIT 1`,
+            [repairNumber]
+          )
+          const existingSPU = await queryOne(
+            `SELECT id FROM ${tableName} WHERE spu = ? LIMIT 1`,
+            [spu]
+          )
+          
+          repairNumberExists = !!existingRepairNumber
+          spuExists = !!existingSPU
+          
+          if (repairNumberExists || spuExists) {
+            console.log(`[API] Duplicate found on attempt ${attempts}. RepairNumber exists: ${repairNumberExists}, SPU exists: ${spuExists}. Retrying...`)
+            // Add small delay to avoid race condition
+            await new Promise(resolve => setTimeout(resolve, 100 * attempts))
+            continue
+          }
+        }
+        
+        // No duplicates found, break out of loop
+        repairNumberExists = false
+        spuExists = false
+        break
+      } catch (error) {
+        console.error("[API] Error generating identifiers:", error)
+        // Fallback generation with timestamp to ensure uniqueness
+        const timestamp = Date.now()
+        const randomSuffix = Math.random().toString(36).substr(2, 4)
+        repairNumber = `${new Date().getFullYear()}-${(timestamp % 10000).toString().padStart(4, "0")}`
+        spu = `SPU-OTH-${randomSuffix.slice(0, 3).padStart(3, "0")}`
+        
+        // Check if fallback values exist
+        const existingRepair = await queryOne(
+          `SELECT id FROM ${tableName} WHERE repairNumber = ? OR spu = ? LIMIT 1`,
+          [repairNumber, spu]
+        )
+        
+        if (!existingRepair) {
+          repairNumberExists = false
+          spuExists = false
+          break
+        }
       }
     }
 
-    // Check for duplicates (shouldn't happen, but safety check)
-    const existingRepair = await queryOne(
-      `SELECT id FROM ${tableName} WHERE repairNumber = ? OR spu = ? LIMIT 1`,
-      [repairNumber, spu]
-    )
+    // If still duplicates after max retries, use timestamp-based fallback
+    if (repairNumberExists || spuExists) {
+      console.warn(`[API] Max retries reached. Using timestamp-based fallback for repair number/SPU`)
+      const timestamp = Date.now()
+      const randomSuffix = Math.random().toString(36).substr(2, 6)
+      repairNumber = `${new Date().getFullYear()}-${(timestamp % 10000).toString().padStart(4, "0")}`
+      spu = `SPU-OTH-${randomSuffix.slice(0, 3).padStart(3, "0")}`
+    }
 
-    if (existingRepair) {
-      return NextResponse.json(
-        { error: "Generated repair number or SPU already exists. Please try again." },
-        { status: 500 }
-      )
+    // Serial number is optional - only use if provided and not empty
+    if (serialNoFromBody && typeof serialNoFromBody === 'string' && serialNoFromBody.trim() !== "") {
+      finalSerialNo = serialNoFromBody.trim()
     }
 
     // Create repair ticket in tenant-specific table
