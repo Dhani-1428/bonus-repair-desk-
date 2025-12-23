@@ -3,7 +3,7 @@ import { query, queryOne, execute, escapeId } from "@/lib/mysql"
 import { getTenantTableNames, createTenantTables, tenantTablesExist, migrateTenantTables } from "@/lib/tenant-db"
 
 // Generate unique Repair Number for tenant (format: YYYY-XXXX)
-async function generateRepairNumber(tenantId: string): Promise<string> {
+async function generateRepairNumber(tenantId: string, retryAttempt: number = 0): Promise<string> {
   const year = new Date().getFullYear()
   const prefix = `${year}-`
 
@@ -14,7 +14,7 @@ async function generateRepairNumber(tenantId: string): Promise<string> {
   // Support both old format (REP-YYYY-XXXX) and new format (YYYY-XXXX)
   // Get all repair numbers for this year and find the max sequence
   const allRepairs = await query(
-    `SELECT repairNumber FROM ${tableName} WHERE repairNumber LIKE ? OR repairNumber LIKE ?`,
+    `SELECT repairNumber FROM ${tableName} WHERE repairNumber LIKE ? OR repairNumber LIKE ? ORDER BY repairNumber DESC`,
     [`${prefix}%`, `REP-${prefix}%`]
   )
 
@@ -35,12 +35,23 @@ async function generateRepairNumber(tenantId: string): Promise<string> {
     }
   }
 
-  const sequence = maxSequence + 1
+  // Calculate base sequence
+  let sequence = maxSequence + 1
+  
+  // On retries, add a small increment to avoid immediate collisions
+  // Use milliseconds component to ensure uniqueness across concurrent requests
+  if (retryAttempt > 0) {
+    const msComponent = Date.now() % 1000  // Last 3 digits of timestamp
+    // Add a small increment based on retry attempt and timestamp
+    const increment = Math.floor((msComponent / 100) % 10) + (retryAttempt * 2)
+    sequence = maxSequence + increment + 1
+  }
+
   return `${prefix}${sequence.toString().padStart(4, "0")}`
 }
 
 // Generate unique SPU based on service for tenant
-async function generateSPU(service: string, tenantId: string): Promise<string> {
+async function generateSPU(service: string, tenantId: string, retryAttempt: number = 0): Promise<string> {
   const servicePrefixes: { [key: string]: string } = {
     "LCD Repair": "SCR",
     "Screen Replacement": "SCR",
@@ -60,7 +71,7 @@ async function generateSPU(service: string, tenantId: string): Promise<string> {
 
   // Find all SPUs with this prefix and get the maximum sequence number
   const allSPUs = await query(
-    `SELECT spu FROM ${tableName} WHERE spu LIKE ?`,
+    `SELECT spu FROM ${tableName} WHERE spu LIKE ? ORDER BY spu DESC`,
     [`${spuPrefix}%`]
   )
 
@@ -80,7 +91,18 @@ async function generateSPU(service: string, tenantId: string): Promise<string> {
     }
   }
 
-  const sequence = maxSequence + 1
+  // Calculate base sequence
+  let sequence = maxSequence + 1
+  
+  // On retries, add a small increment to avoid immediate collisions
+  // Use milliseconds component to ensure uniqueness across concurrent requests
+  if (retryAttempt > 0) {
+    const msComponent = Date.now() % 100  // Last 2 digits of timestamp
+    // Add a small increment based on retry attempt and timestamp
+    const increment = Math.floor((msComponent / 10) % 5) + retryAttempt
+    sequence = maxSequence + increment + 1
+  }
+
   return `${spuPrefix}${sequence.toString().padStart(3, "0")}`
 }
 
@@ -226,16 +248,16 @@ export async function POST(request: NextRequest) {
       attempts++
       
       try {
-        // Generate unique identifiers
+        // Generate unique identifiers with retry attempt number
         let repairNumber: string
         let spu: string
         
         try {
-          repairNumber = await generateRepairNumber(user.tenantId)
+          repairNumber = await generateRepairNumber(user.tenantId, attempts - 1)
           const firstService = Array.isArray(selectedServices) && selectedServices.length > 0
             ? selectedServices[0]
             : "Other"
-          spu = await generateSPU(firstService, user.tenantId)
+          spu = await generateSPU(firstService, user.tenantId, attempts - 1)
         } catch (genError) {
           console.error("[API] Error generating identifiers:", genError)
           // Fallback generation with timestamp to ensure uniqueness
@@ -243,6 +265,19 @@ export async function POST(request: NextRequest) {
           const randomSuffix = Math.random().toString(36).substr(2, 6)
           repairNumber = `${new Date().getFullYear()}-${(timestamp % 10000).toString().padStart(4, "0")}`
           spu = `SPU-OTH-${randomSuffix.slice(0, 3).padStart(3, "0")}`
+        }
+
+        // Double-check that generated numbers don't exist (additional safety check)
+        const existingCheck = await queryOne(
+          `SELECT id FROM ${tableName} WHERE repairNumber = ? OR spu = ? LIMIT 1`,
+          [repairNumber, spu]
+        )
+        
+        if (existingCheck) {
+          console.log(`[API] Pre-insert duplicate check found existing record. Regenerating...`)
+          // Regenerate and continue to next iteration
+          await new Promise(resolve => setTimeout(resolve, 100 * attempts))
+          continue
         }
 
         // Create repair ticket in tenant-specific table
@@ -311,8 +346,10 @@ export async function POST(request: NextRequest) {
           
           console.log(`[API] Duplicate entry detected (${duplicateField}) on attempt ${attempts}. Retrying with new numbers...`)
           
-          // Add exponential backoff delay
-          await new Promise(resolve => setTimeout(resolve, 50 * attempts))
+          // Add exponential backoff delay with jitter to avoid thundering herd
+          const baseDelay = 100 * attempts
+          const jitter = Math.random() * 50
+          await new Promise(resolve => setTimeout(resolve, baseDelay + jitter))
           
           // If it's IMEI duplicate, don't retry - return error immediately
           if (duplicateField === "imeiNo") {
