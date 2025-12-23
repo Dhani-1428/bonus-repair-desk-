@@ -10,6 +10,8 @@ const ADMIN_EMAIL = "bonusrepairdesk@gmail.com"
  */
 async function sendEmail(to: string, subject: string, html: string, text?: string) {
   try {
+    console.log("[Email] Attempting to send email to:", to, "Subject:", subject)
+    
     // If we're on the server side, try to directly import and use the email sending logic
     // Otherwise, use the API endpoint
     const isServerSide = typeof window === "undefined"
@@ -20,7 +22,10 @@ async function sendEmail(to: string, subject: string, html: string, text?: strin
         const nodemailerModule = await import("nodemailer")
         const nodemailer = nodemailerModule.default || nodemailerModule
         
-        const GMAIL_APP_PASSWORD = "afwm ammi rlmg kclv"
+        // Use environment variable if available, otherwise use hardcoded password
+        const GMAIL_APP_PASSWORD = process.env.EMAIL_PASSWORD || "afwm ammi rlmg kclv"
+        console.log("[Email] Using Gmail app password:", GMAIL_APP_PASSWORD ? "✓ Set" : "✗ Missing")
+        
         const transporter = nodemailer.createTransport({
           service: "gmail",
           host: "smtp.gmail.com",
@@ -40,11 +45,13 @@ async function sendEmail(to: string, subject: string, html: string, text?: strin
           text: text || html?.replace(/<[^>]*>/g, ""),
         }
         
+        console.log("[Email] Sending email via nodemailer to:", to)
         const info = await transporter.sendMail(mailOptions)
-        console.log("[Email] Email sent successfully (server-side) to:", to, "MessageId:", info.messageId)
+        console.log("[Email] ✅ Email sent successfully (server-side) to:", to, "MessageId:", info.messageId)
         return true
       } catch (directError: any) {
-        console.error("[Email] Direct email send failed, falling back to API:", directError?.message || directError)
+        console.error("[Email] ❌ Direct email send failed, falling back to API:", directError?.message || directError)
+        console.error("[Email] Error code:", directError?.code, "Error response:", directError?.response)
         // Fall through to API method
       }
     }
@@ -75,15 +82,20 @@ async function sendEmail(to: string, subject: string, html: string, text?: strin
 
     if (!response.ok) {
       const errorText = await response.text()
-      console.error("[Email] Failed to send email. Status:", response.status, "Error:", errorText)
+      console.error("[Email] ❌ Failed to send email. Status:", response.status, "Error:", errorText)
       throw new Error(`Failed to send email: ${response.status} ${errorText}`)
     }
 
     const result = await response.json()
-    console.log("[Email] Email sent successfully to:", to)
+    console.log("[Email] ✅ Email sent successfully (via API) to:", to)
     return true
   } catch (error: any) {
-    console.error("[Email] Error sending email to", to, ":", error?.message || error)
+    console.error("[Email] ❌ Error sending email to", to, ":", error?.message || error)
+    console.error("[Email] Error details:", {
+      code: error?.code,
+      response: error?.response,
+      stack: error?.stack?.substring(0, 500),
+    })
     return false
   }
 }

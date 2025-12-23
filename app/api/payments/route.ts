@@ -153,10 +153,20 @@ export async function POST(request: NextRequest) {
         tenantId: payment.tenantId,
         createdAt: new Date().toISOString(),
       }
-      await sendAdminPaymentRequestNotification(formatted, user)
-    } catch (emailError) {
-      console.error("[API] Error sending admin payment request notification:", emailError)
-      // Don't fail payment creation if email fails
+      console.log("[API] Sending admin payment request notification to bonusrepairdesk@gmail.com for payment:", formatted.id)
+      const emailSent = await sendAdminPaymentRequestNotification(formatted, user)
+      if (emailSent) {
+        console.log("[API] ✅ Admin payment request notification sent successfully")
+      } else {
+        console.error("[API] ⚠️  Admin payment request notification returned false - email may not have been sent")
+      }
+    } catch (emailError: any) {
+      console.error("[API] ❌ Error sending admin payment request notification:", emailError?.message || emailError)
+      console.error("[API] Error details:", {
+        message: emailError?.message,
+        stack: emailError?.stack?.substring(0, 500),
+      })
+      // Don't fail payment creation if email fails, but log the error clearly
     }
 
     return NextResponse.json({ payment: formatted }, { status: 201 })
