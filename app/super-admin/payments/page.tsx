@@ -12,20 +12,27 @@ import { PLAN_PRICING } from "@/lib/constants"
 import { toast } from "sonner"
 import Link from "next/link"
 import { CheckCircle, XCircle, Clock, DollarSign } from "lucide-react"
-import { sendSubscriptionConfirmationEmail, sendPaymentApprovedEmail, sendPaymentRejectedEmail } from "@/lib/email-service"
+// Email sending is now handled by the API endpoints
 
 interface PaymentRequest {
   id: string
   userId: string
-  userName: string
-  userEmail: string
+  user?: {
+    id: string
+    name: string
+    email: string
+    shopName?: string
+    contactNumber?: string
+  }
+  userName?: string
+  userEmail?: string
   plan: string
   planName: string
   price: number
   months: number
   startDate: string
   endDate: string
-  status: "pending" | "approved" | "rejected"
+  status: "PENDING" | "APPROVED" | "REJECTED" | "pending" | "approved" | "rejected"
   createdAt: string
 }
 
@@ -75,159 +82,103 @@ export default function PaymentsPage() {
     return () => clearInterval(interval)
   }, [user, loading, router])
 
-  const loadPaymentRequests = () => {
-    const requests = JSON.parse(localStorage.getItem("payment_requests") || "[]")
-    setPaymentRequests(requests.sort((a: PaymentRequest, b: PaymentRequest) => 
-      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    ))
+  const loadPaymentRequests = async () => {
+    try {
+      const response = await fetch("/api/payments")
+      if (!response.ok) {
+        console.error("[Payments] Failed to fetch payments:", response.status)
+        toast.error("Failed to load payment requests")
+        return
+      }
+      const data = await response.json()
+      const payments = (data.payments || []).map((p: any) => ({
+        ...p,
+        userName: p.user?.name || p.userName || "Unknown",
+        userEmail: p.user?.email || p.userEmail || "Unknown",
+      }))
+      setPaymentRequests(payments.sort((a: PaymentRequest, b: PaymentRequest) => 
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      ))
+    } catch (error) {
+      console.error("[Payments] Error loading payment requests:", error)
+      toast.error("Failed to load payment requests")
+    }
   }
 
   const handleApprovePayment = async (payment: PaymentRequest) => {
     try {
-      // Update payment status
-      const requests = JSON.parse(localStorage.getItem("payment_requests") || "[]")
-      const updatedRequests = requests.map((req: PaymentRequest) =>
-        req.id === payment.id ? { ...req, status: "approved" as const } : req
-      )
-      localStorage.setItem("payment_requests", JSON.stringify(updatedRequests))
-
-      // Save old subscription to history before creating new one
-      const existingSubData = localStorage.getItem(`subscription_${payment.userId}`)
-      if (existingSubData && typeof window !== "undefined") {
-        try {
-          const existingSub = JSON.parse(existingSubData)
-          const subscriptionHistory = JSON.parse(localStorage.getItem(`subscription_history_${payment.userId}`) || "[]")
-          subscriptionHistory.push({
-            ...existingSub,
-            id: existingSub.id || `sub_${Date.now()}_old`,
-            status: existingSub.status === "pending" || existingSub.status === "PENDING" ? "expired" : existingSub.status,
-            paymentStatus: existingSub.paymentStatus || "pending",
-            endedAt: new Date().toISOString(),
-          })
-          const recentHistory = subscriptionHistory.slice(-20)
-          localStorage.setItem(`subscription_history_${payment.userId}`, JSON.stringify(recentHistory))
-        } catch (error) {
-          console.error("Error saving subscription history:", error)
-        }
-      }
-
-      // Activate subscription
-      const subscription = {
-        id: existingSubData ? JSON.parse(existingSubData).id : `sub_${Date.now()}`,
-        userId: payment.userId,
-        plan: payment.plan as any,
-        status: "ACTIVE" as const,
-        startDate: payment.startDate,
-        endDate: payment.endDate,
-        createdAt: payment.createdAt,
-        paymentStatus: "APPROVED" as const,
-        paymentId: payment.id,
-        isFreeTrial: false,
-        price: payment.price,
-      }
-      localStorage.setItem(`subscription_${payment.userId}`, JSON.stringify(subscription))
-      
-      // Add approved subscription to history
-      const subscriptionHistory = JSON.parse(localStorage.getItem(`subscription_history_${payment.userId}`) || "[]")
-      subscriptionHistory.push({
-        ...subscription,
-        id: `${subscription.id}_approved`,
-        approvedAt: new Date().toISOString(),
+      // Call API to approve payment (this will also activate subscription and send emails)
+      const response = await fetch("/api/payments", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id: payment.id,
+          status: "APPROVED",
+        }),
       })
-      const recentHistory = subscriptionHistory.slice(-20)
-      localStorage.setItem(`subscription_history_${payment.userId}`, JSON.stringify(recentHistory))
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || "Failed to approve payment")
+      }
+
+      const data = await response.json()
       
-      // Also update in sessionStorage if this is the current user
-      const currentUser = JSON.parse(sessionStorage.getItem("user") || "{}")
-      if (currentUser.id === payment.userId) {
-        sessionStorage.setItem("subscription", JSON.stringify(subscription))
-        // Trigger page refresh to show updated status immediately
-        window.dispatchEvent(new Event("subscriptionUpdated"))
-      }
-
-      // Send confirmation email
-      const users = JSON.parse(localStorage.getItem("users") || "[]")
-      const userData = users.find((u: any) => u.id === payment.userId)
-      if (userData) {
-        try {
-          await sendPaymentApprovedEmail(userData, subscription)
-        } catch (emailError) {
-          console.error("Error sending approval email:", emailError)
-        }
-      }
-
-      toast.success(`Payment approved! User ${payment.userName} can now access their admin panel.`)
-      loadPaymentRequests()
-    } catch (error) {
+      // Emails are sent automatically by the API
+      toast.success(`Payment approved! User ${payment.userName || payment.user?.name || "Unknown"} can now access their admin panel. Email with receipt has been sent to the user.`)
+      
+      // Reload payment requests to show updated status
+      await loadPaymentRequests()
+    } catch (error: any) {
       console.error("Error approving payment:", error)
-      toast.error("Failed to approve payment. Please try again.")
+      toast.error(error.message || "Failed to approve payment. Please try again.")
     }
   }
 
   const handleRejectPayment = async (payment: PaymentRequest) => {
     try {
-      const requests = JSON.parse(localStorage.getItem("payment_requests") || "[]")
-      const updatedRequests = requests.map((req: PaymentRequest) =>
-        req.id === payment.id ? { ...req, status: "rejected" as const } : req
-      )
-      localStorage.setItem("payment_requests", JSON.stringify(updatedRequests))
+      // Call API to reject payment (this will also send rejection email with WhatsApp contact)
+      const response = await fetch("/api/payments", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id: payment.id,
+          status: "REJECTED",
+        }),
+      })
 
-      // Save to history before updating
-      const subscriptionData = localStorage.getItem(`subscription_${payment.userId}`)
-      if (subscriptionData) {
-        const subscription = JSON.parse(subscriptionData)
-        
-        // Save to history
-        const subscriptionHistory = JSON.parse(localStorage.getItem(`subscription_history_${payment.userId}`) || "[]")
-        subscriptionHistory.push({
-          ...subscription,
-          id: subscription.id || `sub_${Date.now()}_old`,
-          status: "expired",
-          paymentStatus: "REJECTED",
-          endedAt: new Date().toISOString(),
-        })
-        const recentHistory = subscriptionHistory.slice(-20)
-        localStorage.setItem(`subscription_history_${payment.userId}`, JSON.stringify(recentHistory))
-        
-        // Update subscription status to expired and payment status to rejected
-        subscription.status = "expired"
-        subscription.paymentStatus = "REJECTED"
-        localStorage.setItem(`subscription_${payment.userId}`, JSON.stringify(subscription))
-        
-        // Also update in sessionStorage if this is the current user
-        const currentUser = JSON.parse(sessionStorage.getItem("user") || "{}")
-        if (currentUser.id === payment.userId) {
-          sessionStorage.setItem("subscription", JSON.stringify(subscription))
-          // Trigger page refresh to show updated status immediately
-          window.dispatchEvent(new Event("subscriptionUpdated"))
-        }
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || "Failed to reject payment")
       }
 
-      // Send rejection email
-      const users = JSON.parse(localStorage.getItem("users") || "[]")
-      const userData = users.find((u: any) => u.id === payment.userId)
-      if (userData) {
-        try {
-          await sendPaymentRejectedEmail(userData, payment)
-        } catch (emailError) {
-          console.error("Error sending rejection email:", emailError)
-        }
-      }
-
-      toast.success(`Payment rejected for ${payment.userName}.`)
-      loadPaymentRequests()
-    } catch (error) {
+      const data = await response.json()
+      
+      // Email is sent automatically by the API with WhatsApp contact info
+      toast.success(`Payment rejected for ${payment.userName || payment.user?.name || "Unknown"}. Email with WhatsApp contact has been sent to the user.`)
+      
+      // Reload payment requests to show updated status
+      await loadPaymentRequests()
+    } catch (error: any) {
       console.error("Error rejecting payment:", error)
-      toast.error("Failed to reject payment. Please try again.")
+      toast.error(error.message || "Failed to reject payment. Please try again.")
     }
   }
 
   const filteredPayments = paymentRequests.filter((payment) => {
     if (filter === "all") return true
-    return payment.status === filter
+    const status = payment.status.toUpperCase()
+    if (filter === "pending") return status === "PENDING"
+    if (filter === "approved") return status === "APPROVED"
+    if (filter === "rejected") return status === "REJECTED"
+    return false
   })
 
-  const pendingCount = paymentRequests.filter((p) => p.status === "pending").length
+  const pendingCount = paymentRequests.filter((p) => p.status.toUpperCase() === "PENDING").length
 
   if (loading || !user) {
     return (
@@ -280,14 +231,14 @@ export default function PaymentsPage() {
             onClick={() => setFilter("approved")}
             className={filter === "approved" ? "bg-green-600 text-white" : "border-gray-700 bg-gray-900/50 text-white"}
           >
-            Approved ({paymentRequests.filter((p) => p.status === "approved").length})
+            Approved ({paymentRequests.filter((p) => p.status.toUpperCase() === "APPROVED").length})
           </Button>
           <Button
             variant={filter === "rejected" ? "default" : "outline"}
             onClick={() => setFilter("rejected")}
             className={filter === "rejected" ? "bg-red-600 text-white" : "border-gray-700 bg-gray-900/50 text-white"}
           >
-            Rejected ({paymentRequests.filter((p) => p.status === "rejected").length})
+            Rejected ({paymentRequests.filter((p) => p.status.toUpperCase() === "REJECTED").length})
           </Button>
         </div>
 
@@ -305,9 +256,9 @@ export default function PaymentsPage() {
               <Card
                 key={payment.id}
                 className={`shadow-2xl border-2 ${
-                  payment.status === "pending"
+                  payment.status.toUpperCase() === "PENDING"
                     ? "border-yellow-500/50 bg-gradient-to-br from-yellow-900/20 via-black/95 to-yellow-900/20"
-                    : payment.status === "approved"
+                    : payment.status.toUpperCase() === "APPROVED"
                     ? "border-green-500/50 bg-gradient-to-br from-green-900/20 via-black/95 to-green-900/20"
                     : "border-red-500/50 bg-gradient-to-br from-red-900/20 via-black/95 to-red-900/20"
                 } backdrop-blur-sm`}
@@ -320,14 +271,14 @@ export default function PaymentsPage() {
                           {payment.userName.charAt(0).toUpperCase()}
                         </div>
                         <div>
-                          <h3 className="font-semibold text-lg text-white">{payment.userName}</h3>
-                          <p className="text-sm text-gray-400">{payment.userEmail}</p>
+                          <h3 className="font-semibold text-lg text-white">{payment.userName || payment.user?.name || "Unknown"}</h3>
+                          <p className="text-sm text-gray-400">{payment.userEmail || payment.user?.email || "Unknown"}</p>
                         </div>
                         <Badge
                           className={
-                            payment.status === "pending"
+                            payment.status.toUpperCase() === "PENDING"
                               ? "bg-yellow-500/20 text-yellow-400 border-yellow-500/50"
-                              : payment.status === "approved"
+                              : payment.status.toUpperCase() === "APPROVED"
                               ? "bg-green-500/20 text-green-400 border-green-500/50"
                               : "bg-red-500/20 text-red-400 border-red-500/50"
                           }
@@ -362,7 +313,7 @@ export default function PaymentsPage() {
                       </div>
                     </div>
 
-                    {payment.status === "pending" && (
+                    {payment.status.toUpperCase() === "PENDING" && (
                       <div className="flex gap-2 ml-4">
                         <Button
                           onClick={() => handleApprovePayment(payment)}

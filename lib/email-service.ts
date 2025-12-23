@@ -732,13 +732,18 @@ export async function sendPaymentRejectedEmail(user: User, payment: any) {
               <li>Date: ${new Date(payment.createdAt).toLocaleDateString()}</li>
             </ul>
             
-            <p>If you believe this is an error, please contact our support team immediately.</p>
+            <p>If you believe this is an error or have any questions, please contact our Super Admin <strong>Dhani</strong> directly on WhatsApp:</p>
+            
+            <div style="background: #e3f2fd; border-left: 4px solid #2196f3; padding: 20px; margin: 20px 0; text-align: center;">
+              <p style="margin: 0; font-size: 18px; font-weight: bold; color: #1976d2;">📱 WhatsApp: <a href="https://wa.me/351920306889" style="color: #1976d2; text-decoration: none;">+351 920 306 889</a></p>
+              <p style="margin: 10px 0 0 0; font-size: 14px; color: #6b7280;">Click the number to start a WhatsApp conversation</p>
+            </div>
             
             <p style="text-align: center;">
               <a href="${typeof window !== "undefined" ? window.location.origin : ""}/billing" class="button">Try Payment Again</a>
             </p>
             
-            <p>If you have any questions or need assistance, please don't hesitate to contact our support team.</p>
+            <p>We're here to help! Please reach out to Super Admin Dhani on WhatsApp if you need any assistance with your payment.</p>
             
             <p>Best regards,<br><strong>Bonus Repair Desk Team</strong><br>${FROM_EMAIL}</p>
           </div>
@@ -761,11 +766,14 @@ Plan: ${payment.plan}
 Amount: €${payment.price || 0}
 Date: ${new Date(payment.createdAt).toLocaleDateString()}
 
-If you believe this is an error, please contact our support team immediately.
+If you believe this is an error or have any questions, please contact our Super Admin Dhani directly on WhatsApp:
+
+📱 WhatsApp: +351 920 306 889
+(Click the number to start a WhatsApp conversation)
 
 Try payment again: ${typeof window !== "undefined" ? window.location.origin : ""}/billing
 
-If you have any questions or need assistance, please don't hesitate to contact our support team.
+We're here to help! Please reach out to Super Admin Dhani on WhatsApp if you need any assistance with your payment.
 
 Best regards,
 Bonus Repair Desk Team
