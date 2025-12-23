@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { query, queryOne, execute, escapeId } from "@/lib/mysql"
-import { getTenantTableNames, createTenantTables, tenantTablesExist } from "@/lib/tenant-db"
+import { getTenantTableNames, createTenantTables, tenantTablesExist, migrateTenantTables } from "@/lib/tenant-db"
 
 // Generate unique Repair Number for tenant (format: YYYY-XXXX)
 async function generateRepairNumber(tenantId: string): Promise<string> {
@@ -156,6 +156,9 @@ export async function POST(request: NextRequest) {
       console.log(`[API] Creating tenant tables for tenantId: ${user.tenantId}`)
       await createTenantTables(user.tenantId)
       console.log(`[API] ✅ Tenant tables created for user: ${userId}`)
+    } else {
+      // Migrate existing tables to add any missing columns
+      await migrateTenantTables(user.tenantId)
     }
 
     const tables = getTenantTableNames(user.tenantId)

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { query, queryOne, execute, escapeId } from "@/lib/mysql"
-import { getTenantTableNames, createTenantTables, tenantTablesExist } from "@/lib/tenant-db"
+import { getTenantTableNames, createTenantTables, tenantTablesExist, migrateTenantTables } from "@/lib/tenant-db"
 import { getUserTenantId, canAccessTenantData } from "@/lib/tenant-security"
 
 // GET all repair tickets for a user (tenant-specific)
@@ -160,6 +160,9 @@ export async function POST(request: NextRequest) {
     // Ensure tenant tables exist
     if (!(await tenantTablesExist(user.tenantId))) {
       await createTenantTables(user.tenantId)
+    } else {
+      // Migrate existing tables to add any missing columns
+      await migrateTenantTables(user.tenantId)
     }
 
     const tables = getTenantTableNames(user.tenantId)

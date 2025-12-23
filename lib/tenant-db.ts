@@ -187,3 +187,62 @@ export async function tenantTablesExist(tenantId: string): Promise<boolean> {
     return false
   }
 }
+
+/**
+ * Migrate existing tenant tables to add missing columns
+ * This ensures backward compatibility when new columns are added
+ */
+export async function migrateTenantTables(tenantId: string): Promise<void> {
+  const tables = getTenantTableNames(tenantId)
+  const repairTicketsTable = escapeId(tables.repairTickets)
+  const deletedTicketsTable = escapeId(tables.deletedTickets)
+
+  try {
+    // Check if repair_tickets table exists
+    const tableExists = await tenantTablesExist(tenantId)
+    if (!tableExists) {
+      return // Table doesn't exist, will be created with all columns
+    }
+
+    // Check if waterDamaged column exists in repair_tickets table
+    try {
+      await query(`SELECT waterDamaged FROM ${repairTicketsTable} LIMIT 1`)
+    } catch (error: any) {
+      // Column doesn't exist, add it
+      if (error.code === "ER_BAD_FIELD_ERROR" || error.message?.includes("Unknown column")) {
+        console.log(`[Migration] Adding waterDamaged column to ${tables.repairTickets}`)
+        await execute(`
+          ALTER TABLE ${repairTicketsTable} 
+          ADD COLUMN waterDamaged BOOLEAN DEFAULT FALSE AFTER battery
+        `)
+        console.log(`[Migration] ✅ Added waterDamaged column to ${tables.repairTickets}`)
+      } else {
+        throw error
+      }
+    }
+
+    // Check if waterDamaged column exists in deleted_tickets table
+    try {
+      await query(`SELECT waterDamaged FROM ${deletedTicketsTable} LIMIT 1`)
+    } catch (error: any) {
+      // Column doesn't exist, add it
+      if (error.code === "ER_BAD_FIELD_ERROR" || error.message?.includes("Unknown column")) {
+        console.log(`[Migration] Adding waterDamaged column to ${tables.deletedTickets}`)
+        await execute(`
+          ALTER TABLE ${deletedTicketsTable} 
+          ADD COLUMN waterDamaged BOOLEAN DEFAULT NULL AFTER battery
+        `)
+        console.log(`[Migration] ✅ Added waterDamaged column to ${tables.deletedTickets}`)
+      } else {
+        throw error
+      }
+    }
+  } catch (error: any) {
+    // If table doesn't exist, that's fine - it will be created with all columns
+    if (error.code === "ER_NO_SUCH_TABLE") {
+      return
+    }
+    console.error(`[Migration] Error migrating tables for tenant ${tenantId}:`, error)
+    // Don't throw - allow operation to continue
+  }
+}
