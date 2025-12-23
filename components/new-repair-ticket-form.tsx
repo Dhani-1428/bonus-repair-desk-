@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { useTranslation } from "@/components/language-provider"
 import { useAuth } from "@/hooks/use-auth"
 import { toast } from "sonner"
@@ -20,8 +21,7 @@ interface DeviceFormData {
   brand: string
   imeiNo: string
   serialNo: string
-  softwareVersion: string
-  warranty: string
+  warrantyUntil30Days: boolean
   battery: boolean
   charger: boolean
   simCard: boolean
@@ -32,6 +32,7 @@ interface DeviceFormData {
   selectedServices: string[]
   condition: string
   problem: string
+  customProblem: string
   price: string
   imeiError: string | null
   spu?: string // Auto-generated, read-only
@@ -59,12 +60,106 @@ const BRANDS_AND_MODELS: Record<string, string[]> = {
 
 const ALL_BRANDS = Object.keys(BRANDS_AND_MODELS)
 
+// General Issues for Mobile, Laptops, and Computers
+const GENERAL_ISSUES = {
+  mobile: [
+    "Screen cracked or broken",
+    "Screen not responding to touch",
+    "Battery drains quickly",
+    "Phone won't charge",
+    "Charging port damaged",
+    "Speaker not working",
+    "Microphone not working",
+    "Camera not working",
+    "Wi-Fi connection issues",
+    "Bluetooth not working",
+    "Phone keeps restarting",
+    "Phone won't turn on",
+    "Water damage",
+    "Overheating",
+    "Slow performance",
+    "Storage full",
+    "SIM card not detected",
+    "Network signal issues",
+    "Back panel cracked",
+    "Button not working",
+    "Software update failed",
+    "App crashes frequently",
+    "Other (specify below)",
+  ],
+  laptop: [
+    "Screen cracked or broken",
+    "Screen black/blank",
+    "Keyboard not working",
+    "Trackpad not working",
+    "Battery not charging",
+    "Laptop won't turn on",
+    "Overheating",
+    "Slow performance",
+    "Hard drive failure",
+    "Wi-Fi connection issues",
+    "Bluetooth not working",
+    "USB ports not working",
+    "Charging port damaged",
+    "Fan making noise",
+    "Screen flickering",
+    "Keyboard keys stuck",
+    "Operating system issues",
+    "Blue screen error",
+    "Data recovery needed",
+    "Other (specify below)",
+  ],
+  computer: [
+    "Computer won't turn on",
+    "Blue screen error",
+    "Operating system issues",
+    "Hard drive failure",
+    "RAM issues",
+    "Motherboard problems",
+    "Power supply failure",
+    "Overheating",
+    "Slow performance",
+    "Virus/malware removal",
+    "Data recovery needed",
+    "Network connection issues",
+    "USB ports not working",
+    "Graphics card issues",
+    "Sound card not working",
+    "CD/DVD drive not working",
+    "BIOS issues",
+    "Windows update failed",
+    "Software installation issues",
+    "Other (specify below)",
+  ],
+}
+
+// Mobile Conditions on Arrival
+const MOBILE_CONDITIONS = [
+  "Excellent - Like new",
+  "Good - Minor scratches",
+  "Fair - Visible wear",
+  "Poor - Significant damage",
+  "Screen cracked",
+  "Back panel damaged",
+  "Water damage visible",
+  "Button not working",
+  "Charging port damaged",
+  "Other (specify in notes)",
+]
+
+// Generate Client ID
+const generateClientId = (): string => {
+  const timestamp = Date.now()
+  const random = Math.floor(Math.random() * 1000)
+  return `CLI-${timestamp}-${random}`
+}
+
 export function NewRepairTicketForm() {
   const router = useRouter()
   const { t } = useTranslation()
   const { user } = useAuth()
   const [customerName, setCustomerName] = useState("")
-  const [clientId, setClientId] = useState("")
+  const [clientId, setClientId] = useState(generateClientId())
   const [contact, setContact] = useState("")
   const [devices, setDevices] = useState<DeviceFormData[]>([
     {
@@ -72,8 +167,7 @@ export function NewRepairTicketForm() {
       brand: "",
       imeiNo: "",
       serialNo: "",
-      softwareVersion: "",
-      warranty: "Without Warranty",
+      warrantyUntil30Days: false,
       battery: false,
       charger: false,
       simCard: false,
@@ -84,11 +178,13 @@ export function NewRepairTicketForm() {
       selectedServices: [],
       condition: "",
       problem: "",
+      customProblem: "",
       price: "",
       imeiError: null,
     },
   ])
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [showConditionDialog, setShowConditionDialog] = useState<number | null>(null)
   
   // Service to SPU code mapping (same as API)
   const SERVICE_SPU_MAP: Record<string, string> = {
@@ -144,8 +240,7 @@ export function NewRepairTicketForm() {
         brand: "",
         imeiNo: "",
         serialNo: "",
-        softwareVersion: "",
-        warranty: "Without Warranty",
+        warrantyUntil30Days: false,
         battery: false,
         charger: false,
         simCard: false,
@@ -156,6 +251,7 @@ export function NewRepairTicketForm() {
         selectedServices: [],
         condition: "",
         problem: "",
+        customProblem: "",
         price: "",
         imeiError: null,
       },
@@ -227,8 +323,8 @@ export function NewRepairTicketForm() {
       return
     }
 
-    if (!customerName.trim() || !contact.trim() || !clientId.trim()) {
-      toast.error("Customer name, contact, and Client NIF are required")
+    if (!customerName.trim() || !contact.trim()) {
+      toast.error("Customer name and contact are required")
       return
     }
 
@@ -244,7 +340,8 @@ export function NewRepairTicketForm() {
         toast.error(`Device ${i + 1}: At least one service is required`)
         return
       }
-      if (!device.model.trim() || !device.problem.trim() || !device.price.trim()) {
+      const problemText = device.problem === "Other (specify below)" ? device.customProblem : (device.problem === "Custom" ? device.customProblem : device.problem)
+      if (!device.model.trim() || !problemText.trim() || !device.price.trim()) {
         toast.error(`Device ${i + 1}: Model, problem, and price are required`)
         return
       }
@@ -268,8 +365,7 @@ export function NewRepairTicketForm() {
             brand: device.brand || device.model.split(" ")[0] || "N/A",
             model: device.model,
             serialNo: device.serialNo || null,
-            softwareVersion: device.softwareVersion || null,
-            warranty: device.warranty || "Without Warranty",
+            warranty: device.warrantyUntil30Days ? "Warranty Until 30 days" : "Without Warranty",
             battery: device.battery,
             charger: device.charger,
             simCard: device.simCard,
@@ -279,7 +375,7 @@ export function NewRepairTicketForm() {
             repairObs: device.repairObs || null,
             selectedServices: device.selectedServices,
             condition: device.condition || null,
-            problem: device.problem,
+            problem: device.problem === "Other (specify below)" || device.problem === "Custom" ? device.customProblem : device.problem,
             price: parseFloat(device.price),
             status: "PENDING",
           }),
@@ -369,16 +465,14 @@ export function NewRepairTicketForm() {
 
       // Reset form
       setCustomerName("")
-      setClientId("")
-      setIsClientIdAutoGenerated(false)
+      setClientId(generateClientId())
       setContact("")
       setDevices([{
         model: "",
         brand: "",
         imeiNo: "",
         serialNo: "",
-        softwareVersion: "",
-        warranty: "Without Warranty",
+        warrantyUntil30Days: false,
         battery: false,
         charger: false,
         simCard: false,
@@ -389,6 +483,7 @@ export function NewRepairTicketForm() {
         selectedServices: [],
         condition: "",
         problem: "",
+        customProblem: "",
         price: "",
         imeiError: null,
       }])
@@ -423,17 +518,15 @@ export function NewRepairTicketForm() {
           {/* Customer Information */}
           <div className="grid gap-6 md:grid-cols-3 border-b border-gray-800 pb-6">
             <div className="space-y-2">
-              <Label htmlFor="clientId" className="text-gray-200">Client's NIF <span className="text-red-500">*</span></Label>
+              <Label htmlFor="clientId" className="text-gray-200">Client ID (Auto-generated)</Label>
               <Input
                 id="clientId"
-                placeholder="Enter client's NIF (Tax Identification Number)"
                 value={clientId}
-                onChange={(e) => setClientId(e.target.value)}
-                required
-                className="bg-gray-800/50 border-gray-700 text-white placeholder:text-gray-500 focus:border-blue-500"
+                disabled
+                className="bg-blue-900/20 border-blue-700/50 text-blue-300 font-mono font-semibold cursor-not-allowed"
               />
               <p className="text-xs text-gray-500">
-                Enter the client's NIF manually. This field is required.
+                Client ID is automatically generated
               </p>
             </div>
             <div className="space-y-2">
@@ -597,37 +690,28 @@ export function NewRepairTicketForm() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label className="text-gray-200">Serial Number *</Label>
+                    <Label className="text-gray-200">Computer Serial Number *</Label>
                     <Input
-                      placeholder="Enter device serial number"
+                      placeholder="Enter computer serial number"
                       value={device.serialNo || ""}
                       onChange={(e) => updateDevice(deviceIndex, "serialNo", e.target.value)}
                       required
                       className="bg-gray-800/50 border-gray-700 text-white placeholder:text-gray-500 focus:border-blue-500"
                     />
-                    <p className="text-xs text-gray-500">Enter the mobile device serial number</p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label className="text-gray-200">Software Version</Label>
-                    <Input
-                      placeholder="Software Version"
-                      value={device.softwareVersion}
-                      onChange={(e) => updateDevice(deviceIndex, "softwareVersion", e.target.value)}
-                      className="bg-gray-800/50 border-gray-700 text-white placeholder:text-gray-500 focus:border-blue-500"
-                    />
+                    <p className="text-xs text-gray-500">Enter the computer serial number</p>
                   </div>
 
                   <div className="space-y-2">
                     <Label className="text-gray-200">Warranty</Label>
-                    <select
-                      value={device.warranty}
-                      onChange={(e) => updateDevice(deviceIndex, "warranty", e.target.value)}
-                      className="bg-gray-800/50 border-gray-700 text-white rounded-md px-3 py-2 focus:border-blue-500 focus:outline-none"
-                    >
-                      <option value="Without Warranty">Without Warranty</option>
-                      <option value="With Warranty">With Warranty</option>
-                    </select>
+                    <label className="flex items-center gap-2 text-sm text-gray-200 hover:text-white cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 accent-blue-600"
+                        checked={device.warrantyUntil30Days}
+                        onChange={(e) => updateDevice(deviceIndex, "warrantyUntil30Days", e.target.checked)}
+                      />
+                      <span>Warranty Until 30 days</span>
+                    </label>
                   </div>
 
                   {/* Equipment Check */}
@@ -770,26 +854,97 @@ export function NewRepairTicketForm() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label className="text-gray-200">{t("form.condition")}</Label>
-                    <Textarea
-                      placeholder={t("placeholder.condition")}
-                      value={device.condition}
-                      onChange={(e) => updateDevice(deviceIndex, "condition", e.target.value)}
-                      rows={2}
-                      className="bg-gray-800/50 border-gray-700 text-white placeholder:text-gray-500 focus:border-blue-500"
-                    />
+                    <Label className="text-gray-200">Mobile Conditions on Arrival</Label>
+                    <Dialog open={showConditionDialog === deviceIndex} onOpenChange={(open) => setShowConditionDialog(open ? deviceIndex : null)}>
+                      <DialogTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full bg-gray-800/50 border-gray-700 text-white hover:bg-gray-800"
+                        >
+                          {device.condition || "Select condition"}
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="bg-gray-900 border-gray-700 text-white max-w-md">
+                        <DialogHeader>
+                          <DialogTitle>Select Mobile Condition on Arrival</DialogTitle>
+                          <DialogDescription className="text-gray-400">
+                            Choose the condition of the device when it arrived
+                          </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                          {MOBILE_CONDITIONS.map((condition) => (
+                            <button
+                              key={condition}
+                              type="button"
+                              onClick={() => {
+                                updateDevice(deviceIndex, "condition", condition)
+                                setShowConditionDialog(null)
+                              }}
+                              className="w-full text-left px-4 py-2 text-sm text-white hover:bg-gray-800 rounded-md transition-colors"
+                            >
+                              {condition}
+                            </button>
+                          ))}
+                        </div>
+                      </DialogContent>
+                    </Dialog>
                   </div>
 
                   <div className="space-y-2 md:col-span-2">
-                    <Label className="text-gray-200">{t("form.technicianNotes")} *</Label>
-                    <Textarea
-                      placeholder={t("placeholder.technicianNotes")}
+                    <Label className="text-gray-200">General Issues *</Label>
+                    <Select
                       value={device.problem}
-                      onChange={(e) => updateDevice(deviceIndex, "problem", e.target.value)}
-                      rows={3}
-                      required
-                      className="bg-gray-800/50 border-gray-700 text-white placeholder:text-gray-500 focus:border-blue-500"
-                    />
+                      onValueChange={(value) => updateDevice(deviceIndex, "problem", value)}
+                    >
+                      <SelectTrigger className="bg-gray-800/50 border-gray-700 text-white">
+                        <SelectValue placeholder="Select or type a problem" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-gray-900 border-gray-700 text-white max-h-[300px]">
+                        <div className="px-2 py-1 text-xs text-gray-400 font-semibold">Mobile Issues</div>
+                        {GENERAL_ISSUES.mobile.map((issue) => (
+                          <SelectItem key={issue} value={issue} className="text-white hover:bg-gray-800">
+                            {issue}
+                          </SelectItem>
+                        ))}
+                        <div className="px-2 py-1 text-xs text-gray-400 font-semibold mt-2">Laptop Issues</div>
+                        {GENERAL_ISSUES.laptop.map((issue) => (
+                          <SelectItem key={issue} value={issue} className="text-white hover:bg-gray-800">
+                            {issue}
+                          </SelectItem>
+                        ))}
+                        <div className="px-2 py-1 text-xs text-gray-400 font-semibold mt-2">Computer Issues</div>
+                        {GENERAL_ISSUES.computer.map((issue) => (
+                          <SelectItem key={issue} value={issue} className="text-white hover:bg-gray-800">
+                            {issue}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {device.problem === "Other (specify below)" && (
+                      <Textarea
+                        placeholder="Please specify the problem"
+                        value={device.customProblem}
+                        onChange={(e) => updateDevice(deviceIndex, "customProblem", e.target.value)}
+                        rows={3}
+                        required
+                        className="bg-gray-800/50 border-gray-700 text-white placeholder:text-gray-500 focus:border-blue-500 mt-2"
+                      />
+                    )}
+                    {!device.problem && (
+                      <Textarea
+                        placeholder="Or type your problem here if not in the list"
+                        value={device.customProblem}
+                        onChange={(e) => {
+                          updateDevice(deviceIndex, "customProblem", e.target.value)
+                          if (e.target.value) {
+                            updateDevice(deviceIndex, "problem", "Custom")
+                          }
+                        }}
+                        rows={3}
+                        className="bg-gray-800/50 border-gray-700 text-white placeholder:text-gray-500 focus:border-blue-500 mt-2"
+                      />
+                    )}
                   </div>
                 </div>
               </div>
@@ -939,12 +1094,8 @@ export function printReceiptForTickets(tickets: any[]) {
             <div style="display: table-cell; width: 60%; font-size: 7pt;">${ticket.brand || "N/A"} - ${ticket.model || "N/A"}</div>
           </div>
           <div style="display: table; width: 100%; margin: 1px 0;">
-            <div style="display: table-cell; width: 40%; font-weight: bold; font-size: 7pt;">Serial Nº:</div>
+            <div style="display: table-cell; width: 40%; font-weight: bold; font-size: 7pt;">Computer Serial Nº:</div>
             <div style="display: table-cell; width: 60%; font-size: 7pt;">${ticket.serialNo || "-"}</div>
-          </div>
-          <div style="display: table; width: 100%; margin: 1px 0;">
-            <div style="display: table-cell; width: 40%; font-weight: bold; font-size: 7pt;">Software:</div>
-            <div style="display: table-cell; width: 60%; font-size: 7pt;">${ticket.softwareVersion || "-"}</div>
           </div>
           <div style="display: table; width: 100%; margin: 1px 0;">
             <div style="display: table-cell; width: 40%; font-weight: bold; font-size: 7pt;">Warranty:</div>
