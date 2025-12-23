@@ -484,7 +484,10 @@ export async function PUT(request: NextRequest) {
       )
 
       if (existing) {
-        // Save to history
+        // Save to history (convert dates to MySQL format)
+        const historyStartDate = toMySQLDateTime(existing.startDate) || ""
+        const historyEndDate = toMySQLDateTime(existing.endDate) || ""
+        
         await execute(
           `INSERT INTO subscription_history 
            (id, userId, tenantId, plan, status, startDate, endDate, price, paymentStatus, paymentId, isFreeTrial)
@@ -495,8 +498,8 @@ export async function PUT(request: NextRequest) {
             payment.tenantId,
             existing.plan,
             existing.status,
-            existing.startDate,
-            existing.endDate,
+            historyStartDate,
+            historyEndDate,
             existing.price,
             existing.paymentStatus,
             existing.paymentId,
