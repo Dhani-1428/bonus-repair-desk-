@@ -316,7 +316,7 @@ export default function RegisterPage() {
                       All new signups automatically receive a <strong>15-day FREE trial</strong>. After the trial ends, you'll need to subscribe to the plan below to continue.
                     </p>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {Object.entries(PLAN_PRICING).map(([planKey, planDetails]) => (
                       <Card
                         key={planKey}
@@ -331,7 +331,7 @@ export default function RegisterPage() {
                           <div className="text-center">
                             <p className="font-semibold text-white text-sm mb-1">{planDetails.name}</p>
                             <p className="text-xs text-gray-400 mb-2">
-                              {planKey === "MONTHLY" ? "1 month" : planKey === "THREE_MONTH" ? "3 months" : planKey === "SIX_MONTH" ? "6 months" : "12 months"}
+                              {planKey === "SIX_MONTH" ? "6 months" : "12 months"}
                             </p>
                             <p className="text-lg font-bold text-white">€{planDetails.price}</p>
                             <p className="text-xs text-gray-400">After trial</p>
