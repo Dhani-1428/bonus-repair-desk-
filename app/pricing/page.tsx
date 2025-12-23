@@ -6,6 +6,9 @@ import { Check, Sparkles } from "lucide-react"
 import { SubscribeButton } from "./subscribe-button"
 import { useTranslation } from "@/components/language-provider"
 
+// Force dynamic rendering to prevent static generation
+export const dynamic = 'force-dynamic'
+
 export default function PricingPage() {
   const { t } = useTranslation()
   
