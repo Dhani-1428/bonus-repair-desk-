@@ -244,7 +244,7 @@ export function NewRepairTicketForm() {
             brand: device.brand || device.model.split(" ")[0] || "N/A",
             model: device.model,
             serialNo: device.serialNo || null,
-            warranty: device.warrantyUntil30Days ? "Warranty Until 30 days" : "Without Warranty",
+            warranty: device.warrantyUntil30Days ? t("form.warrantyUntil30Days") : t("form.withoutWarranty"),
             simCard: device.simCard,
             memoryCard: device.memoryCard,
             charger: device.charger,
@@ -304,7 +304,7 @@ export function NewRepairTicketForm() {
             brand: ticket.brand || device.brand || "N/A",
             model: ticket.model || device.model,
             serialNo: ticket.serialNo || null,
-            warranty: ticket.warranty || "Without Warranty",
+            warranty: ticket.warranty || t("form.withoutWarranty"),
             simCard: ticket.simCard ?? false,
             memoryCard: ticket.memoryCard ?? false,
             charger: ticket.charger ?? false,
@@ -440,7 +440,7 @@ export function NewRepairTicketForm() {
                 className="border-2 border-gray-800/50 rounded-xl p-6 bg-gradient-to-br from-gray-900/50 to-black/50"
               >
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-white">Device {deviceIndex + 1}</h3>
+                  <h3 className="text-lg font-semibold text-white">{t("form.device")} {deviceIndex + 1}</h3>
                   {devices.length > 1 && (
                     <Button
                       type="button"
@@ -567,19 +567,19 @@ export function NewRepairTicketForm() {
                   </div>
 
                   <div className="space-y-3">
-                    <Label className="text-gray-200 text-base font-semibold">Laptop Serial Number *</Label>
+                    <Label className="text-gray-200 text-base font-semibold">{t("form.laptopSerialNumber")} *</Label>
                     <Input
-                      placeholder="Enter laptop serial number"
+                      placeholder={t("form.laptopSerialNumberPlaceholder")}
                       value={device.serialNo || ""}
                       onChange={(e) => updateDevice(deviceIndex, "serialNo", e.target.value)}
                       required
                       className="bg-gray-800/50 border-gray-700 text-white placeholder:text-gray-500 focus:border-blue-500 h-12 text-lg"
                     />
-                    <p className="text-xs text-gray-500">Enter the laptop serial number</p>
+                    <p className="text-xs text-gray-500">{t("form.laptopSerialNumberHint")}</p>
                   </div>
 
                   <div className="space-y-2">
-                    <Label className="text-gray-200">Warranty</Label>
+                    <Label className="text-gray-200">{t("form.warranty")}</Label>
                     <label className="flex items-center gap-2 text-sm text-gray-200 hover:text-white cursor-pointer">
                       <input
                         type="checkbox"
@@ -587,7 +587,7 @@ export function NewRepairTicketForm() {
                         checked={device.warrantyUntil30Days}
                         onChange={(e) => updateDevice(deviceIndex, "warrantyUntil30Days", e.target.checked)}
                       />
-                      <span>Warranty Until 30 days</span>
+                      <span>{t("form.warrantyUntil30Days")}</span>
                     </label>
                   </div>
 
@@ -729,19 +729,19 @@ export function NewRepairTicketForm() {
                   </div>
 
                   <div className="space-y-2 md:col-span-2">
-                    <Label className="text-gray-200">Repair Number (Auto-generated)</Label>
+                    <Label className="text-gray-200">{t("form.repairNumber")}</Label>
                     <Input
                       value={getRepairNumberPreview()}
                       disabled
                       className="bg-purple-900/20 border-purple-700/50 text-purple-300 font-mono font-semibold cursor-not-allowed"
                     />
-                    <p className="text-xs text-gray-500">Unique repair number will be generated on server</p>
+                    <p className="text-xs text-gray-500">{t("form.repairNumberHint")}</p>
                   </div>
 
                   <div className="space-y-2 md:col-span-2">
-                    <Label className="text-gray-200">Repair Observations</Label>
+                    <Label className="text-gray-200">{t("form.repairObservations")}</Label>
                     <Textarea
-                      placeholder="Repair Observations"
+                      placeholder={t("form.repairObservationsPlaceholder")}
                       value={device.repairObs}
                       onChange={(e) => updateDevice(deviceIndex, "repairObs", e.target.value)}
                       rows={2}
@@ -791,9 +791,9 @@ export function NewRepairTicketForm() {
                   </div>
 
                   <div className="space-y-2 md:col-span-2">
-                    <Label className="text-gray-200">Technician Notes *</Label>
+                    <Label className="text-gray-200">{t("form.technicianNotes")} *</Label>
                     <Textarea
-                      placeholder="Enter technician notes about the problem/issue"
+                      placeholder={t("placeholder.technicianNotes")}
                       value={device.problem}
                       onChange={(e) => updateDevice(deviceIndex, "problem", e.target.value)}
                       rows={4}
