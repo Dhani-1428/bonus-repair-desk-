@@ -226,11 +226,26 @@ export async function migrateTenantTables(tenantId: string): Promise<void> {
           console.warn(`[Migration] Could not modify repairNumber/SPU columns:`, modifyError.message)
         }
         
-        // Add repairId column
-        await execute(`
-          ALTER TABLE ${repairTicketsTable} 
-          ADD COLUMN repairId BIGINT AUTO_INCREMENT PRIMARY KEY FIRST
-        `)
+        // Add repairId column (as AUTO_INCREMENT, but keep existing PRIMARY KEY on id)
+        // First check if id is PRIMARY KEY
+        try {
+          await execute(`
+            ALTER TABLE ${repairTicketsTable} 
+            ADD COLUMN repairId BIGINT AUTO_INCREMENT UNIQUE NOT NULL FIRST
+          `)
+          console.log(`[Migration] ✅ Added repairId column to ${tables.repairTickets}`)
+        } catch (addError: any) {
+          // If it fails because of PRIMARY KEY constraint, try without PRIMARY KEY
+          if (addError.code === "ER_MULTIPLE_PRI_KEY") {
+            await execute(`
+              ALTER TABLE ${repairTicketsTable} 
+              ADD COLUMN repairId BIGINT AUTO_INCREMENT UNIQUE NOT NULL FIRST
+            `)
+            console.log(`[Migration] ✅ Added repairId column (without PRIMARY KEY) to ${tables.repairTickets}`)
+          } else {
+            throw addError
+          }
+        }
         console.log(`[Migration] ✅ Added repairId column to ${tables.repairTickets}`)
         
         // Update existing rows to have repairNumber and SPU based on repairId
