@@ -614,10 +614,51 @@ export function NewRepairTicketForm() {
                     </label>
                   </div>
 
-                  {/* Equipment Check - Large clickable buttons for easy use */}
+                  {/* Services - moved after warranty */}
+                  <div className="space-y-2 md:col-span-2">
+                    <Label className="text-gray-200">{t("form.serviceNames")} *</Label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-gray-800/50 rounded-md border border-gray-700 p-3">
+                      {[
+                        { key: "LCD", translationKey: "service.lcd" },
+                        { key: "Battery", translationKey: "service.battery" },
+                        { key: "Charging Port", translationKey: "service.chargingPort" },
+                        { key: "Microphone", translationKey: "service.microphone" },
+                        { key: "Ear speaker", translationKey: "service.earSpeaker" },
+                        { key: "Back cover", translationKey: "service.backCover" },
+                        { key: "Wifi/Bluetooth", translationKey: "service.wifiBluetooth" },
+                        { key: "Network", translationKey: "service.network" },
+                        { key: "Software", translationKey: "service.software" },
+                        { key: "Shut off", translationKey: "service.shutOff" },
+                      ].map((service) => (
+                        <label key={service.key} className="flex items-center gap-2 text-sm text-gray-200 hover:text-white cursor-pointer">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 accent-blue-600"
+                            checked={device.selectedServices.includes(service.key)}
+                            onChange={() => toggleService(deviceIndex, service.key)}
+                          />
+                          <span>{t(service.translationKey)}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Equipment Observations - moved after services */}
+                  <div className="space-y-2 md:col-span-2">
+                    <Label className="text-gray-200">{t("form.equipmentObservations")}</Label>
+                    <Textarea
+                      placeholder={t("form.equipmentObservationsPlaceholder")}
+                      value={device.equipmentObs}
+                      onChange={(e) => updateDevice(deviceIndex, "equipmentObs", e.target.value)}
+                      rows={2}
+                      className="bg-gray-800/50 border-gray-700 text-white placeholder:text-gray-500 focus:border-blue-500"
+                    />
+                  </div>
+
+                  {/* Equipment Check - All 5 blocks in one line */}
                   <div className="space-y-2 md:col-span-2">
                     <Label className="text-gray-200 text-lg font-semibold mb-3 block">{t("form.equipmentCheck")}</Label>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-5 gap-4">
                       {/* 1. SIM Card */}
                       <label className="flex items-center gap-3 p-4 bg-gray-800/50 rounded-lg border-2 border-gray-700 hover:border-blue-500 hover:bg-gray-800 cursor-pointer transition-all">
                         <input
@@ -741,17 +782,6 @@ export function NewRepairTicketForm() {
                   </div>
 
                   <div className="space-y-2 md:col-span-2">
-                    <Label className="text-gray-200">{t("form.equipmentObservations")}</Label>
-                    <Textarea
-                      placeholder={t("form.equipmentObservationsPlaceholder")}
-                      value={device.equipmentObs}
-                      onChange={(e) => updateDevice(deviceIndex, "equipmentObs", e.target.value)}
-                      rows={2}
-                      className="bg-gray-800/50 border-gray-700 text-white placeholder:text-gray-500 focus:border-blue-500"
-                    />
-                  </div>
-
-                  <div className="space-y-2 md:col-span-2">
                     <Label className="text-gray-200">{t("form.repairNumber")}</Label>
                     <Input
                       value={getRepairNumberPreview()}
@@ -772,45 +802,20 @@ export function NewRepairTicketForm() {
                     />
                   </div>
 
-                  <div className="space-y-2 md:col-span-2">
-                    <Label className="text-gray-200">{t("form.serviceNames")} *</Label>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-gray-800/50 rounded-md border border-gray-700 p-3">
-                      {[
-                        { key: "LCD", translationKey: "service.lcd" },
-                        { key: "Battery", translationKey: "service.battery" },
-                        { key: "Charging Port", translationKey: "service.chargingPort" },
-                        { key: "Microphone", translationKey: "service.microphone" },
-                        { key: "Ear speaker", translationKey: "service.earSpeaker" },
-                        { key: "Back cover", translationKey: "service.backCover" },
-                        { key: "Wifi/Bluetooth", translationKey: "service.wifiBluetooth" },
-                        { key: "Network", translationKey: "service.network" },
-                        { key: "Software", translationKey: "service.software" },
-                        { key: "Shut off", translationKey: "service.shutOff" },
-                      ].map((service) => (
-                        <label key={service.key} className="flex items-center gap-2 text-sm text-gray-200 hover:text-white cursor-pointer">
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4 accent-blue-600"
-                            checked={device.selectedServices.includes(service.key)}
-                            onChange={() => toggleService(deviceIndex, service.key)}
-                          />
-                          <span>{t(service.translationKey)}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-
                   <div className="space-y-2">
                     <Label className="text-gray-200">{t("form.price")} *</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      placeholder={t("placeholder.price")}
-                      value={device.price}
-                      onChange={(e) => updateDevice(deviceIndex, "price", e.target.value)}
-                      required
-                      className="bg-gray-800/50 border-gray-700 text-white placeholder:text-gray-500 focus:border-blue-500"
-                    />
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-lg font-semibold">€</span>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        placeholder={t("placeholder.price")}
+                        value={device.price}
+                        onChange={(e) => updateDevice(deviceIndex, "price", e.target.value)}
+                        required
+                        className="bg-gray-800/50 border-gray-700 text-white placeholder:text-gray-500 focus:border-blue-500 pl-8"
+                      />
+                    </div>
                   </div>
 
                   <div className="space-y-2 md:col-span-2">
