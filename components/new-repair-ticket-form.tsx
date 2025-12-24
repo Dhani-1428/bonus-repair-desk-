@@ -805,7 +805,7 @@ export function NewRepairTicketForm() {
                   <div className="space-y-2">
                     <Label className="text-gray-200">{t("form.price")} *</Label>
                     <div className="relative">
-                      <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-lg font-semibold"></span>
+                      <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-lg font-semibold">€</span>
                       <Input
                         type="number"
                         step="0.01"
@@ -1032,7 +1032,7 @@ export function printReceiptForTickets(tickets: any[]) {
           </div>
           <div style="display: table; width: 100%; margin: 0.5px 0;">
             <div style="display: table-cell; width: 40%; font-weight: bold; font-size: 6.5pt;">Price:</div>
-            <div style="display: table-cell; width: 60%; font-size: 6.5pt;">${Number.parseFloat(ticket.price || 0).toFixed(2)}</div>
+            <div style="display: table-cell; width: 60%; font-size: 6.5pt;">€${Number.parseFloat(ticket.price || 0).toFixed(2)}</div>
           </div>
         </div>
         
