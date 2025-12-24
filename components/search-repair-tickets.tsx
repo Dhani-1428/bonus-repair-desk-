@@ -104,6 +104,9 @@ export function SearchRepairTickets({ initialStatusFilter }: SearchRepairTickets
       const lowercaseTerm = searchTerm.toLowerCase()
       filtered = filtered.filter((ticket: any) => {
         switch (searchType) {
+          case "id":
+            return ticket.repairNumber?.toLowerCase().includes(lowercaseTerm) || 
+                   ticket.id?.toLowerCase().includes(lowercaseTerm)
           case "name":
             return ticket.customerName.toLowerCase().includes(lowercaseTerm)
           case "contact":
@@ -112,30 +115,15 @@ export function SearchRepairTickets({ initialStatusFilter }: SearchRepairTickets
             return ticket.imeiNo.toLowerCase().includes(lowercaseTerm)
           case "model":
             return ticket.model.toLowerCase().includes(lowercaseTerm)
-          case "service":
-            return ticket.serviceName?.toLowerCase().includes(lowercaseTerm)
-          case "problem":
-            return ticket.problem?.toLowerCase().includes(lowercaseTerm)
-          case "condition":
-            return ticket.condition?.toLowerCase().includes(lowercaseTerm)
-          case "price":
-            return String(ticket.price).toLowerCase().includes(lowercaseTerm)
-          case "status":
-            return ticket.status?.toLowerCase().includes(lowercaseTerm)
-          case "repairNumber":
-            return ticket.repairNumber?.toLowerCase().includes(lowercaseTerm)
           default:
+            // Search in all allowed fields: ID, IMEI, Contact, name, model
             return (
+              ticket.repairNumber?.toLowerCase().includes(lowercaseTerm) ||
+              ticket.id?.toLowerCase().includes(lowercaseTerm) ||
               ticket.customerName.toLowerCase().includes(lowercaseTerm) ||
               ticket.contact.toLowerCase().includes(lowercaseTerm) ||
               ticket.imeiNo.toLowerCase().includes(lowercaseTerm) ||
-              ticket.model.toLowerCase().includes(lowercaseTerm) ||
-              ticket.serviceName?.toLowerCase().includes(lowercaseTerm) ||
-              ticket.problem?.toLowerCase().includes(lowercaseTerm) ||
-              ticket.condition?.toLowerCase().includes(lowercaseTerm) ||
-              String(ticket.price).toLowerCase().includes(lowercaseTerm) ||
-              ticket.status?.toLowerCase().includes(lowercaseTerm) ||
-              ticket.repairNumber?.toLowerCase().includes(lowercaseTerm)
+              ticket.model.toLowerCase().includes(lowercaseTerm)
             )
         }
       })
@@ -401,9 +389,9 @@ export function SearchRepairTickets({ initialStatusFilter }: SearchRepairTickets
 
   return (
     <div className="space-y-6">
-      <Card className="shadow-2xl border border-gray-800/50 bg-gradient-to-br from-gray-900/95 via-black/95 to-gray-900/95 backdrop-blur-sm">
-        <CardHeader className="bg-gradient-to-r from-blue-600/20 to-purple-600/20 border-b border-gray-800/50 rounded-t-xl p-6">
-          <CardTitle className="text-2xl font-bold text-white flex items-center gap-3">
+      <Card className="shadow-2xl border border-gray-300/50 bg-gradient-to-br from-gray-100/95 via-gray-50/95 to-gray-100/95 backdrop-blur-sm">
+        <CardHeader className="bg-gradient-to-r from-blue-600/20 to-purple-600/20 border-b border-gray-300/50 rounded-t-xl p-6">
+          <CardTitle className="text-2xl font-bold text-gray-900 flex items-center gap-3">
             <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center ring-2 ring-blue-500/50 shadow-lg">
               <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -412,10 +400,10 @@ export function SearchRepairTickets({ initialStatusFilter }: SearchRepairTickets
             {t("search.title")}
           </CardTitle>
         </CardHeader>
-        <CardContent className="p-6 text-white">
+        <CardContent className="p-6 text-gray-900">
           <div className="grid gap-4 md:grid-cols-3">
             <div className="space-y-2">
-              <Label htmlFor="search" className="font-medium text-gray-200">{t("search.searchLabel")}</Label>
+              <Label htmlFor="search" className="font-medium text-gray-700">{t("search.searchLabel")}</Label>
               <div className="relative">
                 <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 z-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -426,7 +414,7 @@ export function SearchRepairTickets({ initialStatusFilter }: SearchRepairTickets
                     type="date"
                     value={dateFilter}
                     onChange={(e) => setDateFilter(e.target.value || "")}
-                    className="pl-10 bg-gray-800/50 border-gray-700 text-white focus:border-blue-500"
+                    className="pl-10 bg-white/80 border-gray-300 text-gray-900 focus:border-blue-500"
                   />
                 ) : (
                   <Input
@@ -439,22 +427,22 @@ export function SearchRepairTickets({ initialStatusFilter }: SearchRepairTickets
                       if (suggestions.length > 0) setShowSuggestions(true)
                     }}
                     onBlur={() => setTimeout(() => { setSearchInputFocused(false); setShowSuggestions(false) }, 200)}
-                    className="pl-10 bg-gray-800/50 border-gray-700 text-white placeholder:text-gray-500 focus:border-blue-500"
+                    className="pl-10 bg-white/80 border-gray-300 text-gray-900 placeholder:text-gray-500 focus:border-blue-500"
                   />
                 )}
                 {showSuggestions && suggestions.length > 0 && (
-                  <div className="absolute z-50 w-full mt-1 bg-gray-900 border-2 border-gray-700 rounded-lg shadow-xl max-h-64 overflow-y-auto">
+                  <div className="absolute z-50 w-full mt-1 bg-white border-2 border-gray-300 rounded-lg shadow-xl max-h-64 overflow-y-auto">
                     {suggestions.map((suggestion, index) => (
                       <div
                         key={index}
                         onClick={() => handleSuggestionClick(suggestion)}
-                        className="px-4 py-3 hover:bg-gray-800 cursor-pointer border-b border-gray-800 last:border-b-0 transition-colors"
+                        className="px-4 py-3 hover:bg-gray-100 cursor-pointer border-b border-gray-200 last:border-b-0 transition-colors"
                       >
                         <div className="flex items-center gap-2">
-                          <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-4 h-4 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                           </svg>
-                          <span className="text-sm font-medium text-white">{suggestion.display}</span>
+                          <span className="text-sm font-medium text-gray-900">{suggestion.display}</span>
                         </div>
                       </div>
                     ))}
@@ -463,7 +451,7 @@ export function SearchRepairTickets({ initialStatusFilter }: SearchRepairTickets
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="searchType" className="font-medium text-gray-200">{t("search.searchBy")}</Label>
+              <Label htmlFor="searchType" className="font-medium text-gray-700">{t("search.searchBy")}</Label>
               <Select value={searchType} onValueChange={(value) => {
                 setSearchType(value)
                 if (value === "date") {
@@ -473,37 +461,31 @@ export function SearchRepairTickets({ initialStatusFilter }: SearchRepairTickets
                   if (searchTerm.trim()) handleSearch(searchTerm, value)
                 }
               }}>
-                <SelectTrigger id="searchType" className="bg-gray-800/50 border-gray-700 text-white">
+                <SelectTrigger id="searchType" className="bg-white/80 border-gray-300 text-gray-900">
                   <SelectValue placeholder={t("search.field.all")} />
                 </SelectTrigger>
-                <SelectContent className="bg-gray-900 border-gray-700" side="bottom" sideOffset={4}>
-                  <SelectItem value="all" className="text-white">{t("search.field.all")}</SelectItem>
-                  <SelectItem value="name" className="text-white">{t("search.field.name")}</SelectItem>
-                  <SelectItem value="contact" className="text-white">{t("search.field.contact")}</SelectItem>
-                  <SelectItem value="imei" className="text-white">{t("search.field.imei")}</SelectItem>
-                  <SelectItem value="model" className="text-white">{t("search.field.model")}</SelectItem>
-                  <SelectItem value="service" className="text-white">{t("search.field.service")}</SelectItem>
-                  <SelectItem value="problem" className="text-white">{t("search.field.problem")}</SelectItem>
-                  <SelectItem value="condition" className="text-white">{t("search.field.condition")}</SelectItem>
-                  <SelectItem value="price" className="text-white">{t("search.field.price")}</SelectItem>
-                  <SelectItem value="status" className="text-white">{t("search.field.status")}</SelectItem>
-                  <SelectItem value="repairNumber" className="text-white">{t("search.field.repairNumber")}</SelectItem>
-                  <SelectItem value="date" className="text-white">{t("search.field.date")}</SelectItem>
+                <SelectContent className="bg-white border-gray-300" side="bottom" sideOffset={4}>
+                  <SelectItem value="all" className="text-gray-900">{t("search.field.all")}</SelectItem>
+                  <SelectItem value="id" className="text-gray-900">ID</SelectItem>
+                  <SelectItem value="name" className="text-gray-900">{t("search.field.name")}</SelectItem>
+                  <SelectItem value="contact" className="text-gray-900">{t("search.field.contact")}</SelectItem>
+                  <SelectItem value="imei" className="text-gray-900">{t("search.field.imei")}</SelectItem>
+                  <SelectItem value="model" className="text-gray-900">{t("search.field.model")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="statusFilter" className="font-medium text-gray-200">{t("search.filterByStatus")}</Label>
+              <Label htmlFor="statusFilter" className="font-medium text-gray-700">{t("search.filterByStatus")}</Label>
               <Select value={statusFilter} onValueChange={handleStatusFilter}>
-                <SelectTrigger id="statusFilter" className="bg-gray-800/50 border-gray-700 text-white">
+                <SelectTrigger id="statusFilter" className="bg-white/80 border-gray-300 text-gray-900">
                   <SelectValue placeholder={t("status.all")} />
                 </SelectTrigger>
-                <SelectContent className="bg-gray-900 border-gray-700" side="bottom" sideOffset={4}>
-                  <SelectItem value="all" className="text-white">{t("status.all")}</SelectItem>
-                  <SelectItem value="pending" className="text-white">{t("status.pending")}</SelectItem>
-                  <SelectItem value="in_progress" className="text-white">{t("status.in_progress")}</SelectItem>
-                  <SelectItem value="completed" className="text-white">{t("status.completed")}</SelectItem>
-                  <SelectItem value="delivered" className="text-white">{t("status.delivered")}</SelectItem>
+                <SelectContent className="bg-white border-gray-300" side="bottom" sideOffset={4}>
+                  <SelectItem value="all" className="text-gray-900">{t("status.all")}</SelectItem>
+                  <SelectItem value="pending" className="text-gray-900">{t("status.pending")}</SelectItem>
+                  <SelectItem value="in_progress" className="text-gray-900">{t("status.in_progress")}</SelectItem>
+                  <SelectItem value="completed" className="text-gray-900">{t("status.completed")}</SelectItem>
+                  <SelectItem value="delivered" className="text-gray-900">{t("status.delivered")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -511,9 +493,9 @@ export function SearchRepairTickets({ initialStatusFilter }: SearchRepairTickets
         </CardContent>
       </Card>
 
-      <Card className="shadow-2xl border border-gray-800/50 bg-gradient-to-br from-gray-900/95 via-black/95 to-gray-900/95 backdrop-blur-sm">
-        <CardHeader className="bg-gradient-to-r from-blue-600/20 to-purple-600/20 border-b border-gray-800/50 rounded-t-xl p-6">
-          <CardTitle className="text-2xl font-bold text-white flex items-center gap-3">
+      <Card className="shadow-2xl border border-gray-300/50 bg-gradient-to-br from-gray-100/95 via-gray-50/95 to-gray-100/95 backdrop-blur-sm">
+        <CardHeader className="bg-gradient-to-r from-blue-600/20 to-purple-600/20 border-b border-gray-300/50 rounded-t-xl p-6">
+          <CardTitle className="text-2xl font-bold text-gray-900 flex items-center gap-3">
             <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center ring-2 ring-blue-500/50 shadow-lg">
               <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
@@ -522,7 +504,7 @@ export function SearchRepairTickets({ initialStatusFilter }: SearchRepairTickets
             {t("common.allDevices")} ({filteredTickets.length} {filteredTickets.length === 1 ? t("search.results.device") : t("search.results.devices")})
           </CardTitle>
         </CardHeader>
-        <CardContent className="p-6 text-white">
+        <CardContent className="p-6 text-gray-900">
           {filteredTickets.length === 0 ? (
             <div className="text-center py-16">
               <div className="w-20 h-20 mx-auto bg-gradient-to-br from-blue-600/20 to-purple-600/20 rounded-2xl flex items-center justify-center mb-6 border border-gray-800/50">

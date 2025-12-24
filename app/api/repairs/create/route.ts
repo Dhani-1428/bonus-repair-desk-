@@ -246,9 +246,8 @@ export async function POST(request: NextRequest) {
           repairId = rows[0].repairId
         }
 
-        // Generate repairNumber based on repairId (guaranteed unique)
-        const year = new Date().getFullYear()
-        const repairNumber = `${year}-${repairId.toString().padStart(4, "0")}`
+        // Generate repairNumber starting from 260001 (repairId + 260000)
+        const repairNumber = (repairId + 260000).toString()
 
         // Update the row with repairNumber
         await connection.execute(
