@@ -192,16 +192,15 @@ export async function DELETE(
 
     if (ticket) {
       await execute(
-        `INSERT INTO ${deletedTable} (id, userId, repairNumber, spu, clientId, customerName, contact, imeiNo,
+        `INSERT INTO ${deletedTable} (id, userId, repairNumber, clientId, customerName, contact, imeiNo,
           brand, model, serialNo, softwareVersion, warranty, battery, charger,
           simCard, memoryCard, loanEquipment, equipmentObs, repairObs,
           selectedServices, \`condition\`, problem, price, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           ticket.id,
           ticket.userId,
           ticket.repairNumber,
-          ticket.spu,
           ticket.clientId,
           ticket.customerName,
           ticket.contact,

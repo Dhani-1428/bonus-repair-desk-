@@ -113,7 +113,6 @@ export async function POST(request: NextRequest) {
     const {
       userId,
       repairNumber,
-      spu,
       clientId,
       customerName,
       contact,
@@ -137,7 +136,7 @@ export async function POST(request: NextRequest) {
       status,
     } = body
 
-    if (!userId || !repairNumber || !spu || !customerName || !contact || !imeiNo || !brand || !model || !problem || price === undefined || !clientId || clientId.trim() === "") {
+    if (!userId || !repairNumber || !customerName || !contact || !imeiNo || !brand || !model || !problem || price === undefined || !clientId || clientId.trim() === "") {
       return NextResponse.json(
         { error: "Missing required fields. Client NIF is required." },
         { status: 400 }
@@ -171,16 +170,15 @@ export async function POST(request: NextRequest) {
 
     // Insert ticket into tenant-specific table
     await execute(
-      `INSERT INTO ${tableName} (id, userId, repairNumber, spu, clientId, customerName, contact, imeiNo,
+      `INSERT INTO ${tableName} (id, userId, repairNumber, clientId, customerName, contact, imeiNo,
         brand, model, serialNo, softwareVersion, warranty, battery, charger,
         simCard, memoryCard, loanEquipment, equipmentObs, repairObs,
         selectedServices, \`condition\`, problem, price, status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         ticketId,
         userId,
         repairNumber,
-        spu,
         clientId.trim(),
         customerName,
         contact,
@@ -216,7 +214,7 @@ export async function POST(request: NextRequest) {
     console.error("[API] Error creating repair ticket:", error)
     if (error.code === "ER_DUP_ENTRY") {
       return NextResponse.json(
-        { error: "Repair number, SPU, or IMEI already exists" },
+        { error: "Repair number or IMEI already exists" },
         { status: 400 }
       )
     }
@@ -339,16 +337,15 @@ export async function DELETE(request: NextRequest) {
 
     if (ticket) {
       await execute(
-        `INSERT INTO ${deletedTable} (id, userId, repairNumber, spu, clientId, customerName, contact, imeiNo,
+        `INSERT INTO ${deletedTable} (id, userId, repairNumber, clientId, customerName, contact, imeiNo,
           brand, model, serialNo, softwareVersion, warranty, battery, charger,
           simCard, memoryCard, loanEquipment, equipmentObs, repairObs,
           selectedServices, \`condition\`, problem, price, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           ticket.id,
           ticket.userId,
           ticket.repairNumber,
-          ticket.spu,
           ticket.clientId,
           ticket.customerName,
           ticket.contact,
