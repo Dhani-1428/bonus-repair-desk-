@@ -3,8 +3,8 @@ import { query, queryOne, execute, escapeId } from "@/lib/mysql"
 import { getTenantTableNames, createTenantTables, tenantTablesExist, migrateTenantTables } from "@/lib/tenant-db"
 
 // Generate unique Repair Number for tenant (format: YYYY-XXXX)
-// Uses timestamp-based unique generation to prevent race conditions
-async function generateRepairNumber(tenantId: string, retryCount: number = 0): Promise<string> {
+// Simple sequential generation - duplicates handled by retry in main function
+async function generateRepairNumber(tenantId: string): Promise<string> {
   const year = new Date().getFullYear()
   const prefix = `${year}-`
 
@@ -17,67 +17,33 @@ async function generateRepairNumber(tenantId: string, retryCount: number = 0): P
       `SELECT repairNumber FROM ${tableName} 
        WHERE repairNumber LIKE ? OR repairNumber LIKE ?
        ORDER BY repairNumber DESC
-       LIMIT 100`,
+       LIMIT 1`,
       [`${prefix}%`, `REP-${prefix}%`]
     ) as any[]
 
     let maxSequence = 0
-    if (allRepairs && Array.isArray(allRepairs)) {
-      for (const repair of allRepairs) {
-        if (!repair || !repair.repairNumber) continue
+    if (allRepairs && Array.isArray(allRepairs) && allRepairs.length > 0) {
+      const repair = allRepairs[0]
+      if (repair && repair.repairNumber) {
         const match = repair.repairNumber.match(/-(\d{4})$/);
         if (match) {
           const seq = parseInt(match[1], 10)
-          if (!isNaN(seq) && seq > maxSequence) {
+          if (!isNaN(seq)) {
             maxSequence = seq
           }
         }
       }
     }
 
-    // Generate next number with timestamp component to ensure uniqueness
-    const timestamp = Date.now()
-    const randomComponent = Math.floor(Math.random() * 1000)
-    const uniqueOffset = (timestamp % 1000) + (randomComponent % 100) + (retryCount * 17)
+    // Generate next sequential number
+    let sequence = maxSequence + 1
     
-    // Start from maxSequence + 1, add unique offset to prevent collisions
-    let sequence = maxSequence + 1 + (uniqueOffset % 50)
-    
-    // Ensure we don't exceed 9999
+    // If we exceed 9999, wrap around to 1
     if (sequence > 9999) {
-      sequence = maxSequence + 1 + ((uniqueOffset % 20) % (10000 - maxSequence))
-      if (sequence <= maxSequence || sequence > 9999) {
-        sequence = maxSequence + 1
-      }
-    }
-    
-    // Final safety check
-    if (sequence <= maxSequence) {
-      sequence = maxSequence + 1 + ((timestamp % 10) || 1)
+      sequence = 1
     }
 
-    const repairNumber = `${prefix}${sequence.toString().padStart(4, "0")}`
-
-    // Verify it doesn't exist
-    const exists = await queryOne(
-      `SELECT id FROM ${tableName} WHERE repairNumber = ? LIMIT 1`,
-      [repairNumber]
-    )
-
-    if (exists) {
-      // If exists, retry with higher retry count
-      if (retryCount < 10) {
-        await new Promise(resolve => setTimeout(resolve, 50 * retryCount))
-        return await generateRepairNumber(tenantId, retryCount + 1)
-      } else {
-        // After many retries, use pure timestamp-based fallback
-        const fallbackTimestamp = Date.now()
-        const fallbackSequence = ((fallbackTimestamp % 9999) || 1)
-        return `${prefix}${fallbackSequence.toString().padStart(4, "0")}`
-      }
-    }
-
-    return repairNumber
+    return `${prefix}${sequence.toString().padStart(4, "0")}`
   } catch (error: any) {
     console.error("[generateRepairNumber] Error:", error)
     // Fallback: use timestamp-based generation
@@ -88,8 +54,8 @@ async function generateRepairNumber(tenantId: string, retryCount: number = 0): P
 }
 
 // Generate unique SPU based on service for tenant
-// Uses timestamp-based unique generation to prevent race conditions
-async function generateSPU(service: string, tenantId: string, retryCount: number = 0): Promise<string> {
+// Simple sequential generation - duplicates handled by retry in main function
+async function generateSPU(service: string, tenantId: string): Promise<string> {
   const servicePrefixes: { [key: string]: string } = {
     "LCD Repair": "SCR",
     "Screen Replacement": "SCR",
@@ -110,67 +76,33 @@ async function generateSPU(service: string, tenantId: string, retryCount: number
   try {
     // Get max sequence number
     const allSPUs = await query(
-      `SELECT spu FROM ${tableName} WHERE spu LIKE ? ORDER BY spu DESC LIMIT 100`,
+      `SELECT spu FROM ${tableName} WHERE spu LIKE ? ORDER BY spu DESC LIMIT 1`,
       [`${spuPrefix}%`]
     ) as any[]
 
     let maxSequence = 0
-    if (allSPUs && Array.isArray(allSPUs)) {
-      for (const spuRecord of allSPUs) {
-        if (!spuRecord || !spuRecord.spu) continue
+    if (allSPUs && Array.isArray(allSPUs) && allSPUs.length > 0) {
+      const spuRecord = allSPUs[0]
+      if (spuRecord && spuRecord.spu) {
         const match = spuRecord.spu.match(/-(\d+)$/)
         if (match) {
           const seq = parseInt(match[1], 10)
-          if (!isNaN(seq) && seq > maxSequence) {
+          if (!isNaN(seq)) {
             maxSequence = seq
           }
         }
       }
     }
 
-    // Generate next number with timestamp component to ensure uniqueness
-    const timestamp = Date.now()
-    const randomComponent = Math.floor(Math.random() * 100)
-    const uniqueOffset = (timestamp % 100) + (randomComponent % 20) + (retryCount * 7)
+    // Generate next sequential number
+    let sequence = maxSequence + 1
     
-    // Start from maxSequence + 1, add unique offset to prevent collisions
-    let sequence = maxSequence + 1 + (uniqueOffset % 20)
-    
-    // Ensure we don't exceed 999
+    // If we exceed 999, wrap around to 1
     if (sequence > 999) {
-      sequence = maxSequence + 1 + ((uniqueOffset % 10) % (1000 - maxSequence))
-      if (sequence <= maxSequence || sequence > 999) {
-        sequence = maxSequence + 1
-      }
-    }
-    
-    // Final safety check
-    if (sequence <= maxSequence) {
-      sequence = maxSequence + 1 + ((timestamp % 5) || 1)
+      sequence = 1
     }
 
-    const spu = `${spuPrefix}${sequence.toString().padStart(3, "0")}`
-
-    // Verify it doesn't exist
-    const exists = await queryOne(
-      `SELECT id FROM ${tableName} WHERE spu = ? LIMIT 1`,
-      [spu]
-    )
-
-    if (exists) {
-      // If exists, retry with higher retry count
-      if (retryCount < 10) {
-        await new Promise(resolve => setTimeout(resolve, 50 * retryCount))
-        return await generateSPU(service, tenantId, retryCount + 1)
-      } else {
-        // After many retries, use pure timestamp-based fallback
-        const fallbackTimestamp = Date.now()
-        const fallbackSequence = ((fallbackTimestamp % 999) || 1)
-        return `${spuPrefix}${fallbackSequence.toString().padStart(3, "0")}`
-      }
-    }
-
-    return spu
+    return `${spuPrefix}${sequence.toString().padStart(3, "0")}`
   } catch (error: any) {
     console.error("[generateSPU] Error:", error)
     // Fallback: use timestamp-based generation
@@ -322,16 +254,22 @@ export async function POST(request: NextRequest) {
       attempts++
       
       try {
-        // Generate unique identifiers (functions handle uniqueness internally)
+        // Generate unique identifiers - simple sequential generation
+        // If duplicate, database will throw error and we'll retry
         let repairNumber: string
         let spu: string
         
         try {
-          repairNumber = await generateRepairNumber(user.tenantId, attempts - 1)
+          // Add small delay to spread out concurrent requests
+          if (attempts > 1) {
+            await new Promise(resolve => setTimeout(resolve, 50 * attempts + Math.random() * 50))
+          }
+          
+          repairNumber = await generateRepairNumber(user.tenantId)
           const firstService = Array.isArray(selectedServices) && selectedServices.length > 0
             ? selectedServices[0]
             : "Other"
-          spu = await generateSPU(firstService, user.tenantId, attempts - 1)
+          spu = await generateSPU(firstService, user.tenantId)
         } catch (genError: any) {
           console.error("[API] Error generating identifiers:", genError)
           // Fallback generation with timestamp to ensure uniqueness
@@ -339,24 +277,6 @@ export async function POST(request: NextRequest) {
           const randomSuffix = Math.floor(Math.random() * 10000)
           repairNumber = `${new Date().getFullYear()}-${((timestamp % 10000) + randomSuffix % 100).toString().padStart(4, "0")}`
           spu = `SPU-OTH-${((timestamp % 999) + randomSuffix % 100).toString().padStart(3, "0")}`
-        }
-
-        // Final check before insert - verify both numbers are unique
-        const existingRepair = await queryOne(
-          `SELECT id FROM ${tableName} WHERE repairNumber = ? LIMIT 1`,
-          [repairNumber]
-        )
-        
-        const existingSPU = await queryOne(
-          `SELECT id FROM ${tableName} WHERE spu = ? LIMIT 1`,
-          [spu]
-        )
-        
-        if (existingRepair || existingSPU) {
-          console.log(`[API] Pre-insert duplicate check found existing record. Repair: ${!!existingRepair}, SPU: ${!!existingSPU}. Regenerating...`)
-          // Add exponential backoff delay before retry
-          await new Promise(resolve => setTimeout(resolve, 100 * attempts + Math.random() * 50))
-          continue
         }
 
         // Create repair ticket in tenant-specific table
