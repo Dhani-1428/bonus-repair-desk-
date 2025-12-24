@@ -586,40 +586,40 @@ export function SearchRepairTickets({ initialStatusFilter }: SearchRepairTickets
       </Card>
 
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto bg-gray-900 border-gray-800 text-white">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto bg-white border-gray-300 text-gray-900">
           <DialogHeader>
-            <DialogTitle className="text-white">{t("ticket.edit")}</DialogTitle>
+            <DialogTitle className="text-gray-900">{t("ticket.edit")}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleEditSubmit} className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="edit-customerName" className="text-gray-200">{t("form.customerName")} *</Label>
-                <Input id="edit-customerName" value={editFormData.customerName || ""} onChange={(e) => setEditFormData({ ...editFormData, customerName: e.target.value })} required className="bg-gray-800/50 border-gray-700 text-white" />
+                <Label htmlFor="edit-customerName" className="text-gray-900">{t("form.customerName")} *</Label>
+                <Input id="edit-customerName" value={editFormData.customerName || ""} onChange={(e) => setEditFormData({ ...editFormData, customerName: e.target.value })} required className="bg-white border-gray-300 text-gray-900" />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="edit-contact" className="text-gray-200">{t("table.contact")} *</Label>
-                <Input id="edit-contact" value={editFormData.contact || ""} onChange={(e) => setEditFormData({ ...editFormData, contact: e.target.value })} required className="bg-gray-800/50 border-gray-700 text-white" />
+                <Label htmlFor="edit-contact" className="text-gray-900">{t("table.contact")} *</Label>
+                <Input id="edit-contact" value={editFormData.contact || ""} onChange={(e) => setEditFormData({ ...editFormData, contact: e.target.value })} required className="bg-white border-gray-300 text-gray-900" />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="edit-imeiNo" className="text-gray-200">{t("form.imei")} *</Label>
-                <Input id="edit-imeiNo" value={editFormData.imeiNo || ""} onChange={(e) => setEditFormData({ ...editFormData, imeiNo: e.target.value })} required className="bg-gray-800/50 border-gray-700 text-white" />
+                <Label htmlFor="edit-imeiNo" className="text-gray-900">{t("form.imei")} *</Label>
+                <Input id="edit-imeiNo" value={editFormData.imeiNo || ""} onChange={(e) => setEditFormData({ ...editFormData, imeiNo: e.target.value })} required className="bg-white border-gray-300 text-gray-900" />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="edit-model" className="text-gray-200">{t("form.model")} *</Label>
-                <Input id="edit-model" value={editFormData.model || ""} onChange={(e) => setEditFormData({ ...editFormData, model: e.target.value })} required className="bg-gray-800/50 border-gray-700 text-white" />
+                <Label htmlFor="edit-model" className="text-gray-900">{t("form.model")} *</Label>
+                <Input id="edit-model" value={editFormData.model || ""} onChange={(e) => setEditFormData({ ...editFormData, model: e.target.value })} required className="bg-white border-gray-300 text-gray-900" />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="edit-price" className="text-gray-200">{t("form.price")} *</Label>
-                <Input id="edit-price" type="number" step="0.01" value={editFormData.price || ""} onChange={(e) => setEditFormData({ ...editFormData, price: e.target.value })} required className="bg-gray-800/50 border-gray-700 text-white" />
+                <Label htmlFor="edit-price" className="text-gray-900">{t("form.price")} *</Label>
+                <Input id="edit-price" type="number" step="0.01" value={editFormData.price || ""} onChange={(e) => setEditFormData({ ...editFormData, price: e.target.value })} required className="bg-white border-gray-300 text-gray-900" />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="edit-serviceName" className="text-gray-200">{t("form.serviceNames")} *</Label>
-                <Input id="edit-serviceName" value={editFormData.serviceName || ""} onChange={(e) => setEditFormData({ ...editFormData, serviceName: e.target.value })} required className="bg-gray-800/50 border-gray-700 text-white" />
+                <Label htmlFor="edit-serviceName" className="text-gray-900">{t("form.serviceNames")} *</Label>
+                <Input id="edit-serviceName" value={editFormData.serviceName || ""} onChange={(e) => setEditFormData({ ...editFormData, serviceName: e.target.value })} required className="bg-white border-gray-300 text-gray-900" />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="edit-status" className="text-gray-200">{t("table.status")} *</Label>
+                <Label htmlFor="edit-status" className="text-gray-900">{t("table.status")} *</Label>
                 <Select value={editFormData.status || "pending"} onValueChange={(value) => setEditFormData({ ...editFormData, status: value })}>
-                  <SelectTrigger id="edit-status" className="bg-gray-800/50 border-gray-700 text-white">
+                  <SelectTrigger id="edit-status" className="bg-white border-gray-300 text-gray-900">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="bg-gray-900 border-gray-700" side="bottom" sideOffset={4}>
