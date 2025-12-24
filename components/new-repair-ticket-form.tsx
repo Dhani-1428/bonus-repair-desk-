@@ -27,6 +27,7 @@ interface DeviceFormData {
   charger: boolean
   battery: boolean
   waterDamaged: boolean
+  loanEquipment?: boolean
   equipmentObs: string
   repairObs: string
   selectedServices: string[]
@@ -376,15 +377,17 @@ export function NewRepairTicketForm() {
         imeiNo: "",
         serialNo: "",
         warrantyUntil30Days: false,
-        battery: false,
-        charger: false,
         simCard: false,
         memoryCard: false,
+        charger: false,
+        battery: false,
+        waterDamaged: false,
         loanEquipment: false,
         equipmentObs: "",
         repairObs: "",
         selectedServices: [],
         condition: "",
+        customCondition: "",
         problem: "",
         price: "",
         imeiError: null,
@@ -890,11 +893,22 @@ export function printReceiptForTickets(tickets: any[]) {
   const contactNumber = user?.contactNumber || "N/A"
   
   // Get company info from localStorage or use defaults
-  let companyInfo = {}
+  interface CompanyInfo {
+    address?: string
+    phone1?: string
+    phone?: string
+    phone2?: string
+    email?: string
+    companyEmail?: string
+    website?: string
+    vatNumber?: string
+  }
+  
+  let companyInfo: CompanyInfo = {}
   try {
     const stored = localStorage.getItem("companyInfo")
     if (stored) {
-      companyInfo = JSON.parse(stored)
+      companyInfo = JSON.parse(stored) as CompanyInfo
     }
   } catch (e) {
     console.error("Error parsing company info:", e)
