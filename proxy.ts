@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 
-export function middleware(request: NextRequest) {
-  // This middleware is a placeholder for future server-side authentication
+export function proxy(request: NextRequest) {
+  // This proxy is a placeholder for future server-side authentication
   // Currently, authentication is handled client-side in the dashboard
   // 
   // In production, you would:
