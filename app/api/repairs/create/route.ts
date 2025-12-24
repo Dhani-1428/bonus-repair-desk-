@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
-import { query, queryOne, execute, escapeId } from "@/lib/mysql"
+import { query, queryOne, execute, escapeId, getConnection } from "@/lib/mysql"
 import { getTenantTableNames, createTenantTables, tenantTablesExist, migrateTenantTables } from "@/lib/tenant-db"
+import mysql from "mysql2/promise"
 
 // Generate unique Repair Number for tenant (format: YYYY-XXXX)
 // Simple sequential generation - duplicates handled by retry in main function
@@ -244,56 +245,40 @@ export async function POST(request: NextRequest) {
     // Client ID is required and provided by user (no auto-generation)
     const finalClientId = clientId.trim()
 
-    // Retry mechanism to handle race conditions and duplicate entry errors
-    const maxRetries = 15
-    let attempts = 0
-    let ticket: any = null
-    let lastError: any = null
+    // Get service prefix for SPU generation
+    const servicePrefixes: { [key: string]: string } = {
+      "LCD Repair": "SCR",
+      "Screen Replacement": "SCR",
+      "Battery Change": "BAT",
+      "Charging IC Repair": "CHG",
+      "Software Update": "SWU",
+      "Data Recovery": "DAT",
+      "Water Damage": "WAT",
+      "Other": "OTH",
+    }
+    const firstService = Array.isArray(selectedServices) && selectedServices.length > 0
+      ? selectedServices[0]
+      : "Other"
+    const spuPrefix = servicePrefixes[firstService] || "OTH"
 
-    while (attempts < maxRetries) {
-      attempts++
-      
+    try {
+      // Create repair ticket in tenant-specific table
+      // Insert WITHOUT repairNumber and SPU first to get auto-increment repairId
+      const ticketId = `ticket_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+
+      // Insert row and get the auto-increment repairId
+      // Use connection directly to get insertId
+      const connection = await getConnection()
       try {
-        // Generate unique identifiers - simple sequential generation
-        // If duplicate, database will throw error and we'll retry
-        let repairNumber: string
-        let spu: string
-        
-        try {
-          // Add small delay to spread out concurrent requests
-          if (attempts > 1) {
-            await new Promise(resolve => setTimeout(resolve, 50 * attempts + Math.random() * 50))
-          }
-          
-          repairNumber = await generateRepairNumber(user.tenantId)
-          const firstService = Array.isArray(selectedServices) && selectedServices.length > 0
-            ? selectedServices[0]
-            : "Other"
-          spu = await generateSPU(firstService, user.tenantId)
-        } catch (genError: any) {
-          console.error("[API] Error generating identifiers:", genError)
-          // Fallback generation with timestamp to ensure uniqueness
-          const timestamp = Date.now()
-          const randomSuffix = Math.floor(Math.random() * 10000)
-          repairNumber = `${new Date().getFullYear()}-${((timestamp % 10000) + randomSuffix % 100).toString().padStart(4, "0")}`
-          spu = `SPU-OTH-${((timestamp % 999) + randomSuffix % 100).toString().padStart(3, "0")}`
-        }
-
-        // Create repair ticket in tenant-specific table
-        const ticketId = `ticket_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-
-        // Try to insert - this will throw ER_DUP_ENTRY if repairNumber or spu already exists
-        await execute(
-          `INSERT INTO ${tableName} (id, userId, repairNumber, spu, clientId, customerName, contact, imeiNo,
+        const [insertResult] = await connection.execute(
+          `INSERT INTO ${tableName} (id, userId, clientId, customerName, contact, imeiNo,
             brand, model, serialNo, softwareVersion, warranty, simCard, memoryCard,
             charger, battery, waterDamaged, loanEquipment, equipmentObs, repairObs,
             selectedServices, \`condition\`, problem, price, status)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             ticketId,
             userId,
-            repairNumber,
-            spu,
             finalClientId || null,
             customerName,
             contact,
@@ -317,159 +302,89 @@ export async function POST(request: NextRequest) {
             parseFloat(price),
             status || "PENDING"
           ]
-        )
+        ) as mysql.ResultSetHeader[]
 
-        // Fetch created ticket
-        ticket = await queryOne(
-          `SELECT * FROM ${tableName} WHERE id = ?`,
-          [ticketId]
+        // Get the auto-increment repairId from insert result
+        let repairId = insertResult.insertId
+
+        if (!repairId) {
+          // If we can't get insertId, fetch it from the database
+          const [rows] = await connection.execute(
+            `SELECT repairId FROM ${tableName} WHERE id = ?`,
+            [ticketId]
+          ) as any[]
+          if (!rows || rows.length === 0 || !rows[0].repairId) {
+            connection.release()
+            throw new Error("Failed to get repairId after insert")
+          }
+          repairId = rows[0].repairId
+        }
+
+        // Generate repairNumber and SPU based on repairId (guaranteed unique)
+        const year = new Date().getFullYear()
+        const repairNumber = `${year}-${repairId.toString().padStart(4, "0")}`
+        const spu = `SPU-${spuPrefix}-${repairId.toString().padStart(3, "0")}`
+
+        // Update the row with repairNumber and SPU
+        await connection.execute(
+          `UPDATE ${tableName} SET repairNumber = ?, spu = ? WHERE repairId = ?`,
+          [repairNumber, spu, repairId]
         )
         
-        console.log(`[API] ✅ Repair ticket saved successfully to tenant table: ${tables.repairTickets}`)
-        console.log(`[API] Ticket ID: ${ticketId}, Repair Number: ${repairNumber}, Tenant: ${user.tenantId}`)
-        
-        // Success! Break out of retry loop
-        break
-      } catch (error: any) {
-        lastError = error
-        
-        // If it's a duplicate entry error, retry with new numbers
-        if (error.code === "ER_DUP_ENTRY") {
-          const duplicateField = error.sqlMessage?.includes("repairNumber") 
-            ? "repairNumber" 
-            : error.sqlMessage?.includes("spu")
-            ? "spu"
-            : error.sqlMessage?.includes("imeiNo")
-            ? "imeiNo"
-            : "unknown"
-          
-          console.log(`[API] Duplicate entry detected (${duplicateField}) on attempt ${attempts}. Retrying with new numbers...`)
-          
-          // Add exponential backoff delay with jitter to avoid thundering herd
-          const baseDelay = 100 * attempts
-          const jitter = Math.random() * 50
-          await new Promise(resolve => setTimeout(resolve, baseDelay + jitter))
-          
-          // If it's IMEI duplicate, don't retry - return error immediately
-          if (duplicateField === "imeiNo") {
-            return NextResponse.json(
-              { error: "IMEI already exists. Please use a different IMEI." },
-              { status: 400 }
-            )
-          }
-          
-          // Continue to next retry attempt
-          continue
+        connection.release()
+      } catch (connError: any) {
+        if (connection) {
+          connection.release()
         }
-        
-        // For other errors, break and handle below
-        break
+        throw connError
       }
-    }
-
-    // If we exhausted retries or got a non-duplicate error
-    if (!ticket) {
-      if (lastError?.code === "ER_DUP_ENTRY") {
-        // Still getting duplicates after max retries - use guaranteed unique timestamp-based fallback
-        console.warn(`[API] Max retries reached for duplicate entries. Using guaranteed unique timestamp-based fallback.`)
+      
+      // Fetch created ticket
+      ticket = await queryOne(
+        `SELECT * FROM ${tableName} WHERE id = ?`,
+        [ticketId]
+      )
+      
+      console.log(`[API] ✅ Repair ticket saved successfully to tenant table: ${tables.repairTickets}`)
+      console.log(`[API] Ticket ID: ${ticketId}, Repair ID: ${repairId}, Repair Number: ${repairNumber}, SPU: ${spu}, Tenant: ${user.tenantId}`)
+      
+    } catch (error: any) {
+      console.error("[API] Error creating repair ticket:", error)
+      
+      // If it's a duplicate entry error for IMEI, return error immediately
+      if (error.code === "ER_DUP_ENTRY") {
+        const duplicateField = error.sqlMessage?.includes("imeiNo")
+          ? "imeiNo"
+          : error.sqlMessage?.includes("repairNumber")
+          ? "repairNumber"
+          : error.sqlMessage?.includes("spu")
+          ? "spu"
+          : "unknown"
         
-        // Retry with guaranteed unique values using timestamp + random
-        let fallbackAttempts = 0
-        const maxFallbackRetries = 5
-        
-        while (fallbackAttempts < maxFallbackRetries && !ticket) {
-          fallbackAttempts++
-          
-          try {
-            // Generate guaranteed unique values using timestamp + random + attempt number
-            const timestamp = Date.now()
-            const random1 = Math.floor(Math.random() * 10000)
-            const random2 = Math.floor(Math.random() * 1000)
-            const uniqueSuffix = `${timestamp}${random1}${fallbackAttempts}`.slice(-4)
-            
-            const repairNumber = `${new Date().getFullYear()}-${uniqueSuffix}`
-            const spu = `SPU-OTH-${random2.toString().padStart(3, "0")}`
-            const ticketId = `ticket_${timestamp}_${Math.random().toString(36).substr(2, 9)}`
-
-            // Check if these values exist
-            const existingCheck = await queryOne(
-              `SELECT id FROM ${tableName} WHERE repairNumber = ? OR spu = ? LIMIT 1`,
-              [repairNumber, spu]
-            )
-            
-            if (existingCheck) {
-              console.log(`[API] Fallback values also exist, retrying fallback attempt ${fallbackAttempts}...`)
-              await new Promise(resolve => setTimeout(resolve, 50 * fallbackAttempts))
-              continue
-            }
-
-            await execute(
-              `INSERT INTO ${tableName} (id, userId, repairNumber, spu, clientId, customerName, contact, imeiNo,
-                brand, model, serialNo, softwareVersion, warranty, simCard, memoryCard,
-                charger, battery, waterDamaged, loanEquipment, equipmentObs, repairObs,
-                selectedServices, \`condition\`, problem, price, status)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-              [
-                ticketId,
-                userId,
-                repairNumber,
-                spu,
-                finalClientId || null,
-                customerName,
-                contact,
-                imeiNo,
-                brand,
-                model,
-                finalSerialNo || null,
-                softwareVersion || null,
-                warranty || "Without Warranty",
-                simCard || false,
-                memoryCard || false,
-                charger || false,
-                battery || false,
-                waterDamaged || false,
-                loanEquipment || false,
-                equipmentObs || null,
-                repairObs || null,
-                JSON.stringify(selectedServices || []),
-                condition || null,
-                problem,
-                parseFloat(price),
-                status || "PENDING"
-              ]
-            )
-
-            ticket = await queryOne(
-              `SELECT * FROM ${tableName} WHERE id = ?`,
-              [ticketId]
-            )
-            
-            if (ticket) {
-              console.log(`[API] ✅ Fallback insertion successful. Repair Number: ${repairNumber}, SPU: ${spu}`)
-              break
-            }
-          } catch (fallbackError: any) {
-            console.error(`[API] Fallback insertion attempt ${fallbackAttempts} failed:`, fallbackError)
-            if (fallbackAttempts >= maxFallbackRetries) {
-              return NextResponse.json(
-                { error: "Failed to create repair ticket after multiple attempts. Please try again." },
-                { status: 500 }
-              )
-            }
-            await new Promise(resolve => setTimeout(resolve, 100 * fallbackAttempts))
-          }
-        }
-        
-        if (!ticket) {
+        if (duplicateField === "imeiNo") {
           return NextResponse.json(
-            { error: "Failed to create repair ticket after multiple attempts. Please try again." },
-            { status: 500 }
+            { error: "IMEI already exists. Please use a different IMEI." },
+            { status: 400 }
           )
         }
-      } else {
-        // Re-throw the error to be handled by the outer catch block
-        throw lastError
+        
+        // This should not happen with repairId-based generation, but handle it
+        return NextResponse.json(
+          { error: "Generated repair number or SPU already exists. Please try again." },
+          { status: 400 }
+        )
       }
+      
+      // Re-throw to be handled by outer catch
+      throw error
+    }
+
+    // If ticket was not created, return error
+    if (!ticket) {
+      return NextResponse.json(
+        { error: "Failed to create repair ticket. Please try again." },
+        { status: 500 }
+      )
     }
 
     // Parse JSON fields if they exist

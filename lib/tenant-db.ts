@@ -38,10 +38,11 @@ export async function createTenantTables(tenantId: string): Promise<void> {
   // Create repair_tickets table
   await execute(`
     CREATE TABLE IF NOT EXISTS ${repairTicketsTable} (
-      id VARCHAR(36) PRIMARY KEY,
+      repairId BIGINT AUTO_INCREMENT PRIMARY KEY,
+      id VARCHAR(36) UNIQUE NOT NULL,
       userId VARCHAR(36) NOT NULL,
-      repairNumber VARCHAR(50) UNIQUE NOT NULL,
-      spu VARCHAR(50) UNIQUE NOT NULL,
+      repairNumber VARCHAR(50) UNIQUE NULL,
+      spu VARCHAR(50) UNIQUE NULL,
       clientId VARCHAR(255),
       customerName VARCHAR(255) NOT NULL,
       contact VARCHAR(255) NOT NULL,
@@ -202,6 +203,33 @@ export async function migrateTenantTables(tenantId: string): Promise<void> {
     const tableExists = await tenantTablesExist(tenantId)
     if (!tableExists) {
       return // Table doesn't exist, will be created with all columns
+    }
+
+    // Check if repairId column exists in repair_tickets table
+    try {
+      await query(`SELECT repairId FROM ${repairTicketsTable} LIMIT 1`)
+    } catch (error: any) {
+      // Column doesn't exist, add it
+      if (error.code === "ER_BAD_FIELD_ERROR" || error.message?.includes("Unknown column")) {
+        console.log(`[Migration] Adding repairId AUTO_INCREMENT column to ${tables.repairTickets}`)
+        await execute(`
+          ALTER TABLE ${repairTicketsTable} 
+          ADD COLUMN repairId BIGINT AUTO_INCREMENT PRIMARY KEY FIRST
+        `)
+        console.log(`[Migration] ✅ Added repairId column to ${tables.repairTickets}`)
+        
+        // Update existing rows to have repairNumber and SPU based on repairId
+        console.log(`[Migration] Updating existing repairNumber and SPU based on repairId`)
+        await execute(`
+          UPDATE ${repairTicketsTable}
+          SET repairNumber = CONCAT(YEAR(createdAt), '-', LPAD(repairId, 4, '0')),
+              spu = CONCAT('SPU-OTH-', LPAD(repairId, 3, '0'))
+          WHERE repairNumber IS NULL OR repairNumber = '' OR spu IS NULL OR spu = ''
+        `)
+        console.log(`[Migration] ✅ Updated existing repairNumber and SPU values`)
+      } else {
+        throw error
+      }
     }
 
     // Check if waterDamaged column exists in repair_tickets table
