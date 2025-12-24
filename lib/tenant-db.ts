@@ -212,6 +212,21 @@ export async function migrateTenantTables(tenantId: string): Promise<void> {
       // Column doesn't exist, add it
       if (error.code === "ER_BAD_FIELD_ERROR" || error.message?.includes("Unknown column")) {
         console.log(`[Migration] Adding repairId AUTO_INCREMENT column to ${tables.repairTickets}`)
+        
+        // First, make repairNumber and SPU nullable if they're not already
+        try {
+          await execute(`
+            ALTER TABLE ${repairTicketsTable} 
+            MODIFY COLUMN repairNumber VARCHAR(50) UNIQUE NULL,
+            MODIFY COLUMN spu VARCHAR(50) UNIQUE NULL
+          `)
+          console.log(`[Migration] ✅ Made repairNumber and SPU nullable`)
+        } catch (modifyError: any) {
+          // If modification fails, continue anyway
+          console.warn(`[Migration] Could not modify repairNumber/SPU columns:`, modifyError.message)
+        }
+        
+        // Add repairId column
         await execute(`
           ALTER TABLE ${repairTicketsTable} 
           ADD COLUMN repairId BIGINT AUTO_INCREMENT PRIMARY KEY FIRST
@@ -222,7 +237,7 @@ export async function migrateTenantTables(tenantId: string): Promise<void> {
         console.log(`[Migration] Updating existing repairNumber and SPU based on repairId`)
         await execute(`
           UPDATE ${repairTicketsTable}
-          SET repairNumber = CONCAT(YEAR(createdAt), '-', LPAD(repairId, 4, '0')),
+          SET repairNumber = CONCAT(YEAR(COALESCE(createdAt, NOW())), '-', LPAD(repairId, 4, '0')),
               spu = CONCAT('SPU-OTH-', LPAD(repairId, 3, '0'))
           WHERE repairNumber IS NULL OR repairNumber = '' OR spu IS NULL OR spu = ''
         `)
