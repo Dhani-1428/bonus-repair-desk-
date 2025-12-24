@@ -42,7 +42,6 @@ export async function createTenantTables(tenantId: string): Promise<void> {
       id VARCHAR(36) UNIQUE NOT NULL,
       userId VARCHAR(36) NOT NULL,
       repairNumber VARCHAR(50) UNIQUE NULL,
-      spu VARCHAR(50) UNIQUE NULL,
       clientId VARCHAR(255),
       customerName VARCHAR(255) NOT NULL,
       contact VARCHAR(255) NOT NULL,
@@ -94,7 +93,6 @@ export async function createTenantTables(tenantId: string): Promise<void> {
       id VARCHAR(36) PRIMARY KEY,
       userId VARCHAR(36) NOT NULL,
       repairNumber VARCHAR(50) NOT NULL,
-      spu VARCHAR(50) NOT NULL,
       clientId VARCHAR(255),
       customerName VARCHAR(255) NOT NULL,
       contact VARCHAR(255) NOT NULL,
@@ -213,17 +211,30 @@ export async function migrateTenantTables(tenantId: string): Promise<void> {
       if (error.code === "ER_BAD_FIELD_ERROR" || error.message?.includes("Unknown column")) {
         console.log(`[Migration] Adding repairId AUTO_INCREMENT column to ${tables.repairTickets}`)
         
-        // First, make repairNumber and SPU nullable if they're not already
+        // First, make repairNumber nullable if it's not already
         try {
           await execute(`
             ALTER TABLE ${repairTicketsTable} 
-            MODIFY COLUMN repairNumber VARCHAR(50) UNIQUE NULL,
-            MODIFY COLUMN spu VARCHAR(50) UNIQUE NULL
+            MODIFY COLUMN repairNumber VARCHAR(50) UNIQUE NULL
           `)
-          console.log(`[Migration] ✅ Made repairNumber and SPU nullable`)
+          console.log(`[Migration] ✅ Made repairNumber nullable`)
         } catch (modifyError: any) {
           // If modification fails, continue anyway
-          console.warn(`[Migration] Could not modify repairNumber/SPU columns:`, modifyError.message)
+          console.warn(`[Migration] Could not modify repairNumber column:`, modifyError.message)
+        }
+        
+        // Drop SPU column if it exists
+        try {
+          await execute(`
+            ALTER TABLE ${repairTicketsTable} 
+            DROP COLUMN spu
+          `)
+          console.log(`[Migration] ✅ Dropped SPU column from ${tables.repairTickets}`)
+        } catch (dropError: any) {
+          // If column doesn't exist, that's fine
+          if (dropError.code !== "ER_BAD_FIELD_ERROR" && !dropError.message?.includes("Unknown column")) {
+            console.warn(`[Migration] Could not drop SPU column:`, dropError.message)
+          }
         }
         
         // Add repairId column (as AUTO_INCREMENT, but keep existing PRIMARY KEY on id)
@@ -248,15 +259,14 @@ export async function migrateTenantTables(tenantId: string): Promise<void> {
         }
         console.log(`[Migration] ✅ Added repairId column to ${tables.repairTickets}`)
         
-        // Update existing rows to have repairNumber and SPU based on repairId
-        console.log(`[Migration] Updating existing repairNumber and SPU based on repairId`)
+        // Update existing rows to have repairNumber based on repairId
+        console.log(`[Migration] Updating existing repairNumber based on repairId`)
         await execute(`
           UPDATE ${repairTicketsTable}
-          SET repairNumber = CONCAT(YEAR(COALESCE(createdAt, NOW())), '-', LPAD(repairId, 4, '0')),
-              spu = CONCAT('SPU-OTH-', LPAD(repairId, 3, '0'))
-          WHERE repairNumber IS NULL OR repairNumber = '' OR spu IS NULL OR spu = ''
+          SET repairNumber = CONCAT(YEAR(COALESCE(createdAt, NOW())), '-', LPAD(repairId, 4, '0'))
+          WHERE repairNumber IS NULL OR repairNumber = ''
         `)
-        console.log(`[Migration] ✅ Updated existing repairNumber and SPU values`)
+        console.log(`[Migration] ✅ Updated existing repairNumber values`)
       } else {
         throw error
       }

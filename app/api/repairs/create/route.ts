@@ -54,64 +54,6 @@ async function generateRepairNumber(tenantId: string): Promise<string> {
   }
 }
 
-// Generate unique SPU based on service for tenant
-// Simple sequential generation - duplicates handled by retry in main function
-async function generateSPU(service: string, tenantId: string): Promise<string> {
-  const servicePrefixes: { [key: string]: string } = {
-    "LCD Repair": "SCR",
-    "Screen Replacement": "SCR",
-    "Battery Change": "BAT",
-    "Charging IC Repair": "CHG",
-    "Software Update": "SWU",
-    "Data Recovery": "DAT",
-    "Water Damage": "WAT",
-    "Other": "OTH",
-  }
-
-  const prefix = servicePrefixes[service] || "SRV"
-  const spuPrefix = `SPU-${prefix}-`
-
-  const tables = getTenantTableNames(tenantId)
-  const tableName = escapeId(tables.repairTickets)
-
-  try {
-    // Get max sequence number
-    const allSPUs = await query(
-      `SELECT spu FROM ${tableName} WHERE spu LIKE ? ORDER BY spu DESC LIMIT 1`,
-      [`${spuPrefix}%`]
-    ) as any[]
-
-    let maxSequence = 0
-    if (allSPUs && Array.isArray(allSPUs) && allSPUs.length > 0) {
-      const spuRecord = allSPUs[0]
-      if (spuRecord && spuRecord.spu) {
-        const match = spuRecord.spu.match(/-(\d+)$/)
-        if (match) {
-          const seq = parseInt(match[1], 10)
-          if (!isNaN(seq)) {
-            maxSequence = seq
-          }
-        }
-      }
-    }
-
-    // Generate next sequential number
-    let sequence = maxSequence + 1
-    
-    // If we exceed 999, wrap around to 1
-    if (sequence > 999) {
-      sequence = 1
-    }
-
-    return `${spuPrefix}${sequence.toString().padStart(3, "0")}`
-  } catch (error: any) {
-    console.error("[generateSPU] Error:", error)
-    // Fallback: use timestamp-based generation
-    const timestamp = Date.now()
-    const fallbackSequence = ((timestamp % 999) || 1)
-    return `${spuPrefix}${fallbackSequence.toString().padStart(3, "0")}`
-  }
-}
 
 // Generate unique Serial Number for tenant
 async function generateSerialNumber(tenantId: string): Promise<string> {
@@ -245,25 +187,9 @@ export async function POST(request: NextRequest) {
     // Client ID is required and provided by user (no auto-generation)
     const finalClientId = clientId.trim()
 
-    // Get service prefix for SPU generation
-    const servicePrefixes: { [key: string]: string } = {
-      "LCD Repair": "SCR",
-      "Screen Replacement": "SCR",
-      "Battery Change": "BAT",
-      "Charging IC Repair": "CHG",
-      "Software Update": "SWU",
-      "Data Recovery": "DAT",
-      "Water Damage": "WAT",
-      "Other": "OTH",
-    }
-    const firstService = Array.isArray(selectedServices) && selectedServices.length > 0
-      ? selectedServices[0]
-      : "Other"
-    const spuPrefix = servicePrefixes[firstService] || "OTH"
-
     try {
       // Create repair ticket in tenant-specific table
-      // Insert WITHOUT repairNumber and SPU first to get auto-increment repairId
+      // Insert WITHOUT repairNumber first to get auto-increment repairId
       const ticketId = `ticket_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 
       // Insert row and get the auto-increment repairId
@@ -320,15 +246,14 @@ export async function POST(request: NextRequest) {
           repairId = rows[0].repairId
         }
 
-        // Generate repairNumber and SPU based on repairId (guaranteed unique)
+        // Generate repairNumber based on repairId (guaranteed unique)
         const year = new Date().getFullYear()
         const repairNumber = `${year}-${repairId.toString().padStart(4, "0")}`
-        const spu = `SPU-${spuPrefix}-${repairId.toString().padStart(3, "0")}`
 
-        // Update the row with repairNumber and SPU
+        // Update the row with repairNumber
         await connection.execute(
-          `UPDATE ${tableName} SET repairNumber = ?, spu = ? WHERE repairId = ?`,
-          [repairNumber, spu, repairId]
+          `UPDATE ${tableName} SET repairNumber = ? WHERE repairId = ?`,
+          [repairNumber, repairId]
         )
         
         connection.release()
@@ -346,7 +271,7 @@ export async function POST(request: NextRequest) {
       )
       
       console.log(`[API] ✅ Repair ticket saved successfully to tenant table: ${tables.repairTickets}`)
-      console.log(`[API] Ticket ID: ${ticketId}, Repair ID: ${repairId}, Repair Number: ${repairNumber}, SPU: ${spu}, Tenant: ${user.tenantId}`)
+      console.log(`[API] Ticket ID: ${ticketId}, Repair ID: ${repairId}, Repair Number: ${repairNumber}, Tenant: ${user.tenantId}`)
       
     } catch (error: any) {
       console.error("[API] Error creating repair ticket:", error)
@@ -357,8 +282,6 @@ export async function POST(request: NextRequest) {
           ? "imeiNo"
           : error.sqlMessage?.includes("repairNumber")
           ? "repairNumber"
-          : error.sqlMessage?.includes("spu")
-          ? "spu"
           : "unknown"
         
         if (duplicateField === "imeiNo") {
@@ -370,7 +293,7 @@ export async function POST(request: NextRequest) {
         
         // This should not happen with repairId-based generation, but handle it
         return NextResponse.json(
-          { error: "Generated repair number or SPU already exists. Please try again." },
+          { error: "Generated repair number already exists. Please try again." },
           { status: 400 }
         )
       }
@@ -422,25 +345,12 @@ export async function POST(request: NextRequest) {
     if (error.code === "ER_DUP_ENTRY") {
       const duplicateField = error.sqlMessage?.includes("repairNumber") 
         ? "repair number" 
-        : error.sqlMessage?.includes("spu") 
-        ? "SPU" 
         : error.sqlMessage?.includes("imeiNo")
         ? "IMEI"
         : "field"
       
-      // Check if it's both repair number and SPU (common in race conditions)
-      const isRepairNumber = error.sqlMessage?.includes("repairNumber")
-      const isSPU = error.sqlMessage?.includes("spu")
-      
-      if (isRepairNumber && isSPU) {
-        return NextResponse.json(
-          { error: "Generated repair number or SPU already exists. Please try again." },
-          { status: 400 }
-        )
-      }
-      
       return NextResponse.json(
-        { error: `Generated ${duplicateField} already exists. Please try again.` },
+        { error: `${duplicateField.charAt(0).toUpperCase() + duplicateField.slice(1)} already exists. Please use a different value.` },
         { status: 400 }
       )
     }
