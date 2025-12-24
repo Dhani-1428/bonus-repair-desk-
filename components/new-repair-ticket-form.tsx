@@ -805,7 +805,7 @@ export function NewRepairTicketForm() {
                   <div className="space-y-2">
                     <Label className="text-gray-200">{t("form.price")} *</Label>
                     <div className="relative">
-                      <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-lg font-semibold">€</span>
+                      <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-lg font-semibold">��</span>
                       <Input
                         type="number"
                         step="0.01"
@@ -967,7 +967,7 @@ export function printReceiptForTickets(tickets: any[]) {
             <div style="display: table-cell; width: 60%; font-size: 6.5pt;">${formattedDate} ${formattedTime}</div>
           </div>
           <div style="display: table; width: 100%; margin: 0.5px 0;">
-            <div style="display: table-cell; width: 40%; font-weight: bold; font-size: 6.5pt;">Repair nº:</div>
+            <div style="display: table-cell; width: 40%; font-weight: bold; font-size: 6.5pt;">Repair n�:</div>
             <div style="display: table-cell; width: 60%; font-size: 6.5pt;">${ticket.repairNumber || "N/A"}</div>
           </div>
           <div style="display: table; width: 100%; margin: 0.5px 0;">
@@ -979,7 +979,7 @@ export function printReceiptForTickets(tickets: any[]) {
             <div style="display: table-cell; width: 60%; font-size: 6.5pt;">${ticket.brand || "N/A"} - ${ticket.model || "N/A"}</div>
           </div>
           <div style="display: table; width: 100%; margin: 0.5px 0;">
-            <div style="display: table-cell; width: 40%; font-weight: bold; font-size: 6.5pt;">Laptop Serial Nº:</div>
+            <div style="display: table-cell; width: 40%; font-weight: bold; font-size: 6.5pt;">Laptop Serial N�:</div>
             <div style="display: table-cell; width: 60%; font-size: 6.5pt;">${ticket.serialNo || "-"}</div>
           </div>
           <div style="display: table; width: 100%; margin: 0.5px 0;">
@@ -1032,7 +1032,7 @@ export function printReceiptForTickets(tickets: any[]) {
           </div>
           <div style="display: table; width: 100%; margin: 0.5px 0;">
             <div style="display: table-cell; width: 40%; font-weight: bold; font-size: 6.5pt;">Price:</div>
-            <div style="display: table-cell; width: 60%; font-size: 6.5pt;">€${Number.parseFloat(ticket.price || 0).toFixed(2)}</div>
+            <div style="display: table-cell; width: 60%; font-size: 6.5pt;">��${Number.parseFloat(ticket.price || 0).toFixed(2)}</div>
           </div>
         </div>
         
@@ -1046,7 +1046,7 @@ export function printReceiptForTickets(tickets: any[]) {
             O equipamento deverá ser levantado no prazo máximo de sessenta (60) dias após a conclusão da reparação e respetiva notificação por <strong>${shopName}</strong>.
           </div>
           <div style="text-align: justify; margin-bottom: 2px;">
-            Decorrido este prazo, será aplicada uma taxa de armazenamento de 0,95 € por dia, a partir do 61.º dia, até ao limite máximo de cento e vinte (120) dias, aplicável independentemente de a reparação ter sido realizada ou de o orçamento ter sido recusado.
+            Decorrido este prazo, será aplicada uma taxa de armazenamento de 0,95 �� por dia, a partir do 61.� dia, até ao limite máximo de cento e vinte (120) dias, aplicável independentemente de a reparação ter sido realizada ou de o orçamento ter sido recusado.
           </div>
           <div style="text-align: justify; margin-bottom: 2px;">
             Ao aceitar o presente documento, o cliente declara que leu, compreendeu e aceita os termos e condições de reparação.
@@ -1075,7 +1075,7 @@ export function printReceiptForTickets(tickets: any[]) {
           <div style="width: 100%; margin: 0; padding: 2mm 0; position: relative;">
             <!-- Dotted cutting line -->
             <div style="border-top: 2px dotted #000; border-bottom: 2px dotted #000; margin: 0 auto; padding: 2mm 0; width: 100%; position: relative;">
-              <div style="text-align: center; font-size: 7pt; color: #000; margin: 1mm 0; font-weight: bold; letter-spacing: 3px;">✂️ CUT HERE ✂️</div>
+              <div style="text-align: center; font-size: 7pt; color: #000; margin: 1mm 0; font-weight: bold; letter-spacing: 3px;">��️ CUT HERE ��️</div>
             </div>
             <!-- Additional dotted line for better visibility -->
             <div style="border-top: 1px dotted #666; margin: 1mm auto 0; width: 100%;"></div>
